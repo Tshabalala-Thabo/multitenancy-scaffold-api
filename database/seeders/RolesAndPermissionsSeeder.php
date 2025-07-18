@@ -39,7 +39,7 @@ class RolesAndPermissionsSeeder extends Seeder
         ]);
 
         // Give super admin all permissions
-        //$superAdminRole->syncPermissions(Permission::all());
+        // $superAdminRole->syncPermissions(Permission::all());
 
         // 3. Create Super Admin User (not tied to a tenant)
         $superAdminUser = User::firstOrCreate(
@@ -51,7 +51,11 @@ class RolesAndPermissionsSeeder extends Seeder
             ]
         );
 
-        $superAdminUser->assignRole($superAdminRole);
+        if ($superAdminRole && !$superAdminUser->hasRole($superAdminRole->name)) {
+            $superAdminUser->assignRole($superAdminRole->name);
+        }
+
+        // $superAdminUser->assignRole($superAdminRole);
 
         // 4. Loop through all tenants and seed tenant-scoped roles & assign permissions
         // Tenant::all()->each(function ($tenant) use ($permissions) {

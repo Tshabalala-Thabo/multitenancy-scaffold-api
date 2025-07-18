@@ -26,7 +26,6 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'tenant_id',
     ];
 
     public function getRoleTeamId(): int|string|null
