@@ -1,8 +1,50 @@
 <?php
 
+use App\Http\Controllers\TenantController;
+use App\Http\Controllers\TenantUserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum'])->get('/user', function (Request $request) {
-    return $request->user();
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+|
+| Here is where you can register API routes for your application. These
+| routes are loaded by the RouteServiceProvider within a group which
+| is assigned the "api" middleware group. Enjoy building your API!
+|
+*/
+
+// Public routes
+Route::get('/tenants', [TenantController::class, 'index']);
+
+// Protected routes
+Route::middleware(['auth:sanctum'])->group(function () {
+    // User routes
+    Route::get('/user', function (Request $request) {
+        return $request->user();
+    });
+    
+    // Tenant management routes (admin only)
+    Route::middleware(['can:manage tenants'])->group(function () {
+        Route::apiResource('tenants', TenantController::class)->except(['index']);
+        
+        // Tenant-user management
+        Route::get('tenants/{tenant}/users', [TenantUserController::class, 'index']);
+        Route::post('tenants/{tenant}/users', [TenantUserController::class, 'assignUser']);
+        Route::delete('tenants/{tenant}/users/{user}', [TenantUserController::class, 'removeUser']);
+        Route::put('tenants/{tenant}/users/{user}/roles', [TenantUserController::class, 'updateRoles']);
+    });
+});
+
+// Tenant-specific routes
+Route::middleware(['auth:sanctum', 'multitenancy'])->prefix('tenant')->group(function () {
+    // These routes will only be accessible when a tenant is active
+    Route::get('/dashboard', function () {
+        return response()->json([
+            'tenant' => tenant()->only(['id', 'name', 'slug']),
+            'message' => 'Welcome to the tenant dashboard',
+        ]);
+    });
 });

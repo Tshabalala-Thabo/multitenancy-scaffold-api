@@ -6,11 +6,16 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+//use Spatie\Multitenancy\Models\Concerns\BelongsToTenant;
+use Spatie\Multitenancy\Models\Concerns\UsesTenantConnection;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, UsesTenantConnection, HasRoles;
+
+    protected $guarded = [];
 
     /**
      * The attributes that are mass assignable.
@@ -21,7 +26,24 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'tenant_id',
     ];
+
+    public function getRoleTeamId(): int|string|null
+    {
+        return tenant()?->id;
+    }
+
+    /**
+     * Get the tenants that the user belongs to.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     */
+    public function tenants()
+    {
+        return $this->belongsToMany(Tenant::class)
+            ->withTimestamps(); // Track when the relationship was created/updated
+    }
 
     /**
      * The attributes that should be hidden for serialization.
