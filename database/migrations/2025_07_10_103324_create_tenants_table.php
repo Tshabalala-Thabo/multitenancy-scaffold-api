@@ -11,6 +11,8 @@ return new class extends Migration {
             $table->id();
             $table->string('name');
             $table->string('slug')->unique(); // For tenant identification via subdomain or URL
+            $table->string('domain')->unique()->nullable();
+            $table->string('logo_path')->nullable();
             $table->timestamps();
         });
     }
