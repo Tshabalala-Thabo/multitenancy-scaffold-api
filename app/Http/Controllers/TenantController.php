@@ -2,125 +2,164 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Tenant;
 use App\Models\User;
-use App\Models\Address;
-use Illuminate\Http\Request;
+use App\Models\Tenant;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Validation\Rule;
+use Illuminate\Http\JsonResponse;
+use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rule;
-use Spatie\Permission\Models\Role;
 
 class TenantController extends Controller
 {
     /**
-     * Display a listing of the tenants.
+     * @return JsonResponse|Response
      */
-    public function index()
+    public function index(): Response|JsonResponse
     {
-        return response()->json([
-            'tenants' => Tenant::with('address')->get()->map(function ($tenant) {
-                return array_merge($tenant->toArray(), [
-                    'logo_url' => $tenant->getLogoUrl()
-                ]);
-            }),
-        ]);
+        try {
+            $tenants = Tenant::with(['address', 'users'])->get()->map(function ($tenant) {
+                $tenantArray = $tenant->toArray();
+                $tenantArray['logo_url'] = $tenant->getLogoUrl();
+
+                $tenantArray['users'] = $tenant->users->map(function ($user) use ($tenant) {
+                    $userArray = $user->toArray();
+
+                    // Manually fetch roles for this tenant
+                    $userArray['roles'] = $user->roles()
+                        ->wherePivot('tenant_id', $tenant->id)
+                        ->pluck('name');
+
+                    return $userArray;
+                });
+
+                return $tenantArray;
+            });
+
+            return $this->json($tenants->toArray());
+
+        } catch (\Exception $e) {
+            if (app()->environment('local')) {
+                return response()->json([
+                    'message' => 'Failed to retrieve tenants.',
+                    'error' => $e->getMessage(),
+                ], 500);
+            }
+
+            return $this->jsonServerError('Failed to retrieve tenants.');
+        }
     }
 
     /**
-     * Store a newly created tenant in storage.
+     * @param Request $request
+     * @return JsonResponse|Response
      */
-    public function store(Request $request)
+    public function store(Request $request): Response|JsonResponse
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'slug' => ['required', 'string', 'max:255', 'unique:tenants,slug'],
             'domain' => ['nullable', 'string', 'max:255', 'unique:tenants,domain'],
             'logo' => ['nullable', 'image', 'max:2048'],
-            // Address validation
             'address' => ['required', 'array'],
             'address.street_address' => ['required', 'string', 'max:255'],
             'address.suburb' => ['required', 'string', 'max:255'],
             'address.city' => ['required', 'string', 'max:255'],
             'address.province' => ['required', 'string', 'max:255'],
             'address.postal_code' => ['required', 'string', 'max:10'],
-            // Administrator details
-            'admin_name' => ['required', 'string', 'max:255'],
-            'admin_email' => ['required', 'email', 'unique:users,email'],
-            'admin_password' => ['required', 'string', 'min:8'],
+            'administrators' => ['required', 'array', 'min:1'],
+            'administrators.*.name' => ['required', 'string', 'max:255'],
+            'administrators.*.email' => ['required', 'email', 'unique:users,email'],
+            'administrators.*.password' => ['required', 'string', 'min:8'],
         ]);
 
         try {
             DB::beginTransaction();
 
-            // Create the tenant
             $tenant = Tenant::create([
                 'name' => $validated['name'],
                 'slug' => Str::slug($validated['slug']),
                 'domain' => $validated['domain'],
-
             ]);
 
-            // Handle logo upload if provided
             if ($request->hasFile('logo')) {
                 $tenant->storeLogo($request->file('logo'));
             }
 
-            // Create address for tenant
             $tenant->address()->create($validated['address']);
 
-            // Create administrator user
-            $admin = User::create([
-                'name' => $validated['admin_name'],
-                'email' => $validated['admin_email'],
-                'password' => Hash::make($validated['admin_password']),
+            Log::info('tenant id: ' . $tenant->id);
+            $adminRole = Role::firstOrCreate([
+                'name' => 'administrator',
+                'tenant_id' => $tenant->id,
+                'guard_name' => 'web',
             ]);
 
-            // Attach user to tenant
-            $tenant->users()->attach($admin->id);
+            foreach ($validated['administrators'] as $adminData) {
+                $admin = User::create([
+                    'name' => $adminData['name'],
+                    'email' => $adminData['email'],
+                    'password' => Hash::make($adminData['password']),
+                ]);
 
-            // Assign administrator role
-            $adminRole = Role::firstOrCreate(['name' => 'Administrator', 'team_id' => $tenant->id]);
-            $admin->assignRole($adminRole);
+                $tenant->users()->attach($admin->id);
 
-            // Update address if provided
+                // Attach role with tenant_id to pivot table
+                $admin->roles()->attach($adminRole->id, ['tenant_id' => $tenant->id]);
+            }
+
+
             if (isset($validated['address'])) {
                 $tenant->address()->update($validated['address']);
             }
 
             DB::commit();
 
-            return response()->json([
-                'message' => 'Tenant created successfully',
-                'tenant' => array_merge($tenant->toArray(), [
-                    'logo_url' => $tenant->getLogoUrl()
-                ]),
-                'administrator' => $admin,
-            ], 201);
+            return $this->jsonSuccess('Tenant created successfully');
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'message' => 'Failed to create tenant',
-                'error' => $e->getMessage(),
-            ], 500);
+
+            if (app()->environment('local')) {
+                return response()->json([
+                    'message' => 'Failed to create tenant.',
+                    'error' => $e->getMessage(),
+                ], 500);
+            }
+
+            return $this->jsonServerError('Failed to create tenant.');
         }
     }
 
     /**
-     * Display the specified tenant.
+     * @param Tenant $tenant
+     * @return JsonResponse|Response
      */
-    public function show(Tenant $tenant)
+    public function show(Tenant $tenant): Response|JsonResponse
     {
-        return response()->json([
-            'tenant' => $tenant,
-        ]);
+        try {
+            $tenant = Tenant::with('address')->find($tenant->id);
+            return $this->json($tenant->toArray());
+        } catch (\Exception $ex) {
+            if (app()->environment('local')) {
+                return response()->json([
+                    'message' => 'Failed to create tenant.',
+                    'error' => $ex->getMessage(),
+                ], 500);
+            }
+            return $this->jsonServerError('Failed to retrieve tenant.');
+        }
     }
 
     /**
-     * Update the specified tenant in storage.
+     * @param Request $request
+     * @param Tenant $tenant
+     * @return JsonResponse|Response
      */
-    public function update(Request $request, Tenant $tenant)
+    public function update(Request $request, Tenant $tenant): Response|JsonResponse
     {
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
@@ -149,42 +188,58 @@ class TenantController extends Controller
                 'name' => $validated['name'] ?? $tenant->name,
                 'slug' => isset($validated['slug']) ? Str::slug($validated['slug']) : $tenant->slug,
                 'domain' => $validated['domain'] ?? $tenant->domain,
-
             ]);
 
             DB::commit();
 
-            return response()->json([
-                'message' => 'Tenant updated successfully',
-                'tenant' => array_merge($tenant->toArray(), [
-                    'logo_url' => $tenant->getLogoUrl()
-                ]),
-            ]);
+//            return response()->json([
+//                'message' => 'Tenant updated successfully',
+//                'tenant' => array_merge($tenant->toArray(), [
+//                    'logo_url' => $tenant->getLogoUrl()
+//                ]),
+//            ]);
+
+            return $this->jsonSuccess('Tenant updated successfully');
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'message' => 'Failed to update tenant',
-                'error' => $e->getMessage(),
-            ], 500);
+
+            if (app()->environment('local')) {
+                return response()->json([
+                    'message' => 'Failed to create tenant.',
+                    'error' => $e->getMessage(),
+                ], 500);
+            }
+
+            return $this->jsonServerError('Failed to update tenant.');
         }
     }
 
     /**
-     * Remove the specified tenant from storage.
+     * @param Tenant $tenant
+     * @return JsonResponse|Response
      */
-    public function destroy(Tenant $tenant)
+    public function destroy(Tenant $tenant): Response|JsonResponse
     {
-        // Check if tenant has users before deleting
-        if ($tenant->users()->count() > 0) {
-            return response()->json([
-                'message' => 'Cannot delete tenant with associated users',
-            ], 422);
+        try {
+            if ($tenant->users()->count() > 0) {
+                return response()->json([
+                    'message' => 'Cannot delete tenant with associated users',
+                ], 422);
+            }
+
+            $tenant->delete();
+
+            return $this->jsonSuccess('Tenant deleted successfully');
+        } catch (\Exception $e) {
+
+            if (app()->environment('local')) {
+                return response()->json([
+                    'message' => 'Failed to create tenant.',
+                    'error' => $e->getMessage(),
+                ], 500);
+            }
+
+            return $this->jsonServerError('Failed to delete tenant.');
         }
-
-        $tenant->delete();
-
-        return response()->json([
-            'message' => 'Tenant deleted successfully',
-        ]);
     }
 }

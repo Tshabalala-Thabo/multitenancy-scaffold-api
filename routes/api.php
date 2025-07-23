@@ -6,18 +6,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 /*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-|
-| Here is where you can register API routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| is assigned the "api" middleware group. Enjoy building your API!
-|
-*/
-
-// Public routes
-Route::get('/tenants', [TenantController::class, 'index']);
+ * |--------------------------------------------------------------------------
+ * | API Routes
+ * |--------------------------------------------------------------------------
+ * |
+ * | Here is where you can register API routes for your application. These
+ * | routes are loaded by the RouteServiceProvider within a group which
+ * | is assigned the "api" middleware group. Enjoy building your API!
+ * |
+ */
 
 // Protected routes
 Route::middleware(['auth:sanctum'])->group(function () {
@@ -25,17 +22,18 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
-    
+
+    Route::apiResource('tenants', TenantController::class);
     // Tenant management routes (admin only)
-    Route::middleware(['can:manage tenants'])->group(function () {
-        Route::apiResource('tenants', TenantController::class)->except(['index']);
-        
-        // Tenant-user management
-        Route::get('tenants/{tenant}/users', [TenantUserController::class, 'index']);
-        Route::post('tenants/{tenant}/users', [TenantUserController::class, 'assignUser']);
-        Route::delete('tenants/{tenant}/users/{user}', [TenantUserController::class, 'removeUser']);
-        Route::put('tenants/{tenant}/users/{user}/roles', [TenantUserController::class, 'updateRoles']);
-    });
+//    Route::middleware(['role:super_admin'])->group(function () {
+//        Route::apiResource('tenants', TenantController::class)->except(['index']);
+//
+//        // Tenant-user management
+//        Route::get('tenants/{tenant}/users', [TenantUserController::class, 'index']);
+//        Route::post('tenants/{tenant}/users', [TenantUserController::class, 'assignUser']);
+//        Route::delete('tenants/{tenant}/users/{user}', [TenantUserController::class, 'removeUser']);
+//        Route::put('tenants/{tenant}/users/{user}/roles', [TenantUserController::class, 'updateRoles']);
+//    });
 });
 
 // Tenant-specific routes
