@@ -56,7 +56,7 @@ class TenantController extends Controller
 
     /**
      * @param Request $request
-     * @return JsonResponse|Response
+     * @return Response|JsonResponse
      */
     public function store(Request $request): Response|JsonResponse
     {
@@ -119,7 +119,22 @@ class TenantController extends Controller
 
             DB::commit();
 
-            return $this->jsonSuccess('Tenant created successfully');
+            $tenant->load(['address', 'users']);
+
+            $tenantArray = $tenant->toArray();
+            $tenantArray['logo_url'] = $tenant->getLogoUrl();
+
+            $tenantArray['users'] = $tenant->users->map(function ($user) use ($tenant) {
+                $userArray = $user->toArray();
+
+                $userArray['roles'] = $user->roles()
+                    ->wherePivot('tenant_id', $tenant->id)
+                    ->pluck('name');
+
+                return $userArray;
+            });
+
+            return response()->json($tenantArray);
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -166,46 +181,117 @@ class TenantController extends Controller
             'slug' => ['sometimes', 'string', 'max:255', Rule::unique('tenants', 'slug')->ignore($tenant->id)],
             'domain' => ['nullable', 'string', 'max:255', Rule::unique('tenants', 'domain')->ignore($tenant->id)],
             'logo' => ['nullable', 'image', 'max:2048'],
-            // Address validation
+            'remove_logo' => ['nullable', 'boolean'],
             'address' => ['sometimes', 'array'],
             'address.street_address' => ['sometimes', 'string', 'max:255'],
             'address.suburb' => ['sometimes', 'string', 'max:255'],
             'address.city' => ['sometimes', 'string', 'max:255'],
             'address.province' => ['sometimes', 'string', 'max:255'],
             'address.postal_code' => ['sometimes', 'string', 'max:10'],
+            'administrators' => ['sometimes', 'array'],
+            'administrators.*.name' => ['required_with:administrators', 'string', 'max:255'],
+            'administrators.*.email' => ['required_with:administrators', 'email'],
+            'administrators.*.is_new' => ['nullable', 'boolean'],
         ]);
 
         try {
             DB::beginTransaction();
 
-            // Handle logo upload if provided
+            Log::debug('Updating logo:', [
+                'hasFile' => $request->hasFile('logo'),
+                'file' => $request->file('logo'),
+            ]);
+
+            // Handle logo upload
             if ($request->hasFile('logo')) {
+                log::info('Uploading tenant logo for ID: ' . $tenant->id);
                 $tenant->storeLogo($request->file('logo'));
             }
 
-            // Update the tenant
+            // Handle logo removal
+            if ($request->boolean('remove_logo')) {
+                Log::info('Removing tenant logo for ID: ' . $tenant->id);
+                $tenant->deleteLogo();
+                $tenant->logo_path = null;
+                $tenant->save();
+            }
+
+            // Update tenant main fields
             $tenant->update([
                 'name' => $validated['name'] ?? $tenant->name,
                 'slug' => isset($validated['slug']) ? Str::slug($validated['slug']) : $tenant->slug,
                 'domain' => $validated['domain'] ?? $tenant->domain,
             ]);
 
+            // Update address if present
+            if (isset($validated['address'])) {
+                $tenant->address()->update($validated['address']);
+            }
+
+            // Update administrators if provided
+            if (isset($validated['administrators'])) {
+                $adminRole = Role::firstOrCreate([
+                    'name' => 'administrator',
+                    'tenant_id' => $tenant->id,
+                    'guard_name' => 'web',
+                ]);
+
+                foreach ($validated['administrators'] as $adminData) {
+                    if (!empty($adminData['is_new'] === true)) {
+                        // Create new administrator
+                        $newAdmin = User::create([
+                            'name' => $adminData['name'],
+                            'email' => $adminData['email'],
+                            'password' => Hash::make($adminData['password'] ?? Str::random(10)),
+                        ]);
+
+                        // Attach to tenant and role
+                        $tenant->users()->attach($newAdmin->id);
+                        $newAdmin->roles()->attach($adminRole->id, ['tenant_id' => $tenant->id]);
+
+                        continue;
+                    }
+
+                    // Update existing administrator
+                    $existingAdmin = $tenant->users()
+                        ->whereHas('roles', function ($q) use ($adminRole) {
+                            $q->where('roles.id', $adminRole->id);
+                        })
+                        ->where('email', $adminData['email'])
+                        ->first();
+
+                    if ($existingAdmin) {
+                        $existingAdmin->update([
+                            'name' => $adminData['name'],
+                            'email' => $adminData['email'],
+                        ]);
+                    }
+                }
+            }
+
+
             DB::commit();
 
-//            return response()->json([
-//                'message' => 'Tenant updated successfully',
-//                'tenant' => array_merge($tenant->toArray(), [
-//                    'logo_url' => $tenant->getLogoUrl()
-//                ]),
-//            ]);
+            $tenant->load(['address', 'users']);
 
-            return $this->jsonSuccess('Tenant updated successfully');
+            $tenantArray = $tenant->toArray();
+            $tenantArray['logo_url'] = $tenant->getLogoUrl();
+
+            $tenantArray['users'] = $tenant->users->map(function ($user) use ($tenant) {
+                $userArray = $user->toArray();
+                $userArray['roles'] = $user->roles()
+                    ->wherePivot('tenant_id', $tenant->id)
+                    ->pluck('name');
+                return $userArray;
+            });
+
+            return $this->json($tenantArray);
         } catch (\Exception $e) {
             DB::rollBack();
 
             if (app()->environment('local')) {
                 return response()->json([
-                    'message' => 'Failed to create tenant.',
+                    'message' => 'Failed to update tenant.',
                     'error' => $e->getMessage(),
                 ], 500);
             }

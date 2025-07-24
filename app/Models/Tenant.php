@@ -25,6 +25,17 @@ class Tenant extends BaseTenant
     ];
 
     /**
+     * @return void
+     */
+    public function deleteLogo(): void
+    {
+        if ($this->logo_path && Storage::disk('public')->exists($this->logo_path)) {
+            Storage::disk('public')->delete($this->logo_path);
+        }
+    }
+
+
+    /**
      * Get the address associated with the tenant.
      */
     public function address()
