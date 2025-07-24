@@ -73,9 +73,12 @@ class TenantController extends Controller
             'address.postal_code' => ['required', 'string', 'max:10'],
             'administrators' => ['required', 'array', 'min:1'],
             'administrators.*.name' => ['required', 'string', 'max:255'],
+            'administrators.*.last_name' => ['required', 'string', 'max:255'],
             'administrators.*.email' => ['required', 'email', 'unique:users,email'],
             'administrators.*.password' => ['required', 'string', 'min:8'],
         ]);
+
+        Log::debug('Requet administrators: ' . json_encode($validated['administrators']));
 
         try {
             DB::beginTransaction();
@@ -99,9 +102,12 @@ class TenantController extends Controller
                 'guard_name' => 'web',
             ]);
 
+            Log::info('Start creating tenant users');
+
             foreach ($validated['administrators'] as $adminData) {
                 $admin = User::create([
                     'name' => $adminData['name'],
+                    'last_name' => $adminData['last_name'],
                     'email' => $adminData['email'],
                     'password' => Hash::make($adminData['password']),
                 ]);
@@ -111,6 +117,8 @@ class TenantController extends Controller
                 // Attach role with tenant_id to pivot table
                 $admin->roles()->attach($adminRole->id, ['tenant_id' => $tenant->id]);
             }
+
+            Log::info('Finished creating tenant users');
 
 
             if (isset($validated['address'])) {
@@ -190,6 +198,7 @@ class TenantController extends Controller
             'address.postal_code' => ['sometimes', 'string', 'max:10'],
             'administrators' => ['sometimes', 'array'],
             'administrators.*.name' => ['required_with:administrators', 'string', 'max:255'],
+            'administrators.*.last_name' => ['required_with:administrators', 'string', 'max:255'],
             'administrators.*.email' => ['required_with:administrators', 'email'],
             'administrators.*.is_new' => ['nullable', 'boolean'],
         ]);
@@ -241,6 +250,7 @@ class TenantController extends Controller
                         // Create new administrator
                         $newAdmin = User::create([
                             'name' => $adminData['name'],
+                            'last_name' => $adminData['last_name'],
                             'email' => $adminData['email'],
                             'password' => Hash::make($adminData['password'] ?? Str::random(10)),
                         ]);
@@ -263,6 +273,7 @@ class TenantController extends Controller
                     if ($existingAdmin) {
                         $existingAdmin->update([
                             'name' => $adminData['name'],
+                            'last_name' => $adminData['last_name'],
                             'email' => $adminData['email'],
                         ]);
                     }
