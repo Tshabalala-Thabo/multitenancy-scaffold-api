@@ -25,6 +25,7 @@ class User extends Authenticatable
         'last_name',
         'email',
         'password',
+        'current_tenant_id',
     ];
 
     /**
@@ -56,6 +57,11 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Tenant::class)
             ->withTimestamps(); // Track when the relationship was created/updated
+    }
+
+    public function currentTenant()
+    {
+        return $this->belongsTo(Tenant::class, 'current_tenant_id');
     }
 
     /**

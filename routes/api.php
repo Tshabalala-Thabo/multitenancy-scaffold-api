@@ -29,6 +29,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     });
 
     Route::apiResource('tenants', TenantController::class);
+    Route::post('/tenants/switch', [\App\Http\Controllers\SwitchTenantController::class, 'switch']);
     // Tenant management routes (admin only)
 //    Route::middleware(['role:super_admin'])->group(function () {
 //        Route::apiResource('tenants', TenantController::class)->except(['index']);

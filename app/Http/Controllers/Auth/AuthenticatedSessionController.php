@@ -19,6 +19,15 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        $user = $request->user();
+
+        if ($user->current_tenant_id) {
+            $tenant = $user->tenants()->find($user->current_tenant_id);
+            if ($tenant) {
+                $tenant->makeCurrent();
+            }
+        }
+
         return response()->noContent();
     }
 
