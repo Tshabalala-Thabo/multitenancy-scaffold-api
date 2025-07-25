@@ -20,7 +20,12 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:sanctum'])->group(function () {
     // User routes
     Route::get('/user', function (Request $request) {
-        return $request->user();
+        $user = $request->user();
+        $user->load([
+            'roles',
+            'permissions'
+        ]);
+        return response()->json($user);
     });
 
     Route::apiResource('tenants', TenantController::class);
