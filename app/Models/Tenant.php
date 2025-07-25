@@ -44,12 +44,10 @@ class Tenant extends BaseTenant
     }
 
     /**
-     * Store a new logo for the tenant.
-     *
-     * @param \Illuminate\Http\UploadedFile $file
-     * @return string
+     * @param $file
+     * @return mixed
      */
-    public function storeLogo($file)
+    public function storeLogo($file): mixed
     {
         if ($this->logo_path) {
             Storage::disk('public')->delete($this->logo_path);

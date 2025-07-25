@@ -2,17 +2,17 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\Tenant;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Validation\Rule;
-use Illuminate\Http\JsonResponse;
-use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Spatie\Permission\Models\Role;
 
 class TenantController extends Controller
 {
@@ -30,7 +30,8 @@ class TenantController extends Controller
                     $userArray = $user->toArray();
 
                     // Manually fetch roles for this tenant
-                    $userArray['roles'] = $user->roles()
+                    $userArray['roles'] = $user
+                        ->roles()
                         ->wherePivot('tenant_id', $tenant->id)
                         ->pluck('name');
 
@@ -41,7 +42,6 @@ class TenantController extends Controller
             });
 
             return $this->json($tenants->toArray());
-
         } catch (\Exception $e) {
             if (app()->environment('local')) {
                 return response()->json([
@@ -117,16 +117,9 @@ class TenantController extends Controller
                 // Attach role with tenant_id to pivot table
                 $admin->roles()->attach($adminRole->id, ['tenant_id' => $tenant->id]);
             }
-
-            Log::info('Finished creating tenant users');
-
-
-            if (isset($validated['address'])) {
-                $tenant->address()->update($validated['address']);
-            }
+            $tenant->address()->update($validated['address']);
 
             DB::commit();
-
             $tenant->load(['address', 'users']);
 
             $tenantArray = $tenant->toArray();
@@ -135,14 +128,14 @@ class TenantController extends Controller
             $tenantArray['users'] = $tenant->users->map(function ($user) use ($tenant) {
                 $userArray = $user->toArray();
 
-                $userArray['roles'] = $user->roles()
+                $userArray['roles'] = $user
+                    ->roles()
                     ->wherePivot('tenant_id', $tenant->id)
                     ->pluck('name');
 
                 return $userArray;
             });
-
-            return response()->json($tenantArray);
+            return $this->json($tenantArray);
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -169,7 +162,7 @@ class TenantController extends Controller
         } catch (\Exception $ex) {
             if (app()->environment('local')) {
                 return response()->json([
-                    'message' => 'Failed to create tenant.',
+                    'message' => 'Failed to retrieve tenant.',
                     'error' => $ex->getMessage(),
                 ], 500);
             }
@@ -219,7 +212,6 @@ class TenantController extends Controller
 
             // Handle logo removal
             if ($request->boolean('remove_logo')) {
-                Log::info('Removing tenant logo for ID: ' . $tenant->id);
                 $tenant->deleteLogo();
                 $tenant->logo_path = null;
                 $tenant->save();
@@ -246,8 +238,7 @@ class TenantController extends Controller
                 ]);
 
                 foreach ($validated['administrators'] as $adminData) {
-                    if (!empty($adminData['is_new'] === true)) {
-                        // Create new administrator
+                    if ($adminData['is_new'] ?? false) {
                         $newAdmin = User::create([
                             'name' => $adminData['name'],
                             'last_name' => $adminData['last_name'],
@@ -263,7 +254,8 @@ class TenantController extends Controller
                     }
 
                     // Update existing administrator
-                    $existingAdmin = $tenant->users()
+                    $existingAdmin = $tenant
+                        ->users()
                         ->whereHas('roles', function ($q) use ($adminRole) {
                             $q->where('roles.id', $adminRole->id);
                         })
@@ -280,7 +272,6 @@ class TenantController extends Controller
                 }
             }
 
-
             DB::commit();
 
             $tenant->load(['address', 'users']);
@@ -290,7 +281,8 @@ class TenantController extends Controller
 
             $tenantArray['users'] = $tenant->users->map(function ($user) use ($tenant) {
                 $userArray = $user->toArray();
-                $userArray['roles'] = $user->roles()
+                $userArray['roles'] = $user
+                    ->roles()
                     ->wherePivot('tenant_id', $tenant->id)
                     ->pluck('name');
                 return $userArray;
@@ -328,10 +320,9 @@ class TenantController extends Controller
 
             return $this->jsonSuccess('Tenant deleted successfully');
         } catch (\Exception $e) {
-
             if (app()->environment('local')) {
                 return response()->json([
-                    'message' => 'Failed to create tenant.',
+                    'message' => 'Failed to delete tenant.',
                     'error' => $e->getMessage(),
                 ], 500);
             }
