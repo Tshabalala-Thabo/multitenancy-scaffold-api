@@ -7,6 +7,7 @@ use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class AuthenticatedSessionController extends Controller
@@ -23,20 +24,31 @@ class AuthenticatedSessionController extends Controller
 
         $user = $request->user();
 
+        // Check if current_tenant_id exists and the user belongs to that tenant
         if ($user->current_tenant_id && $user->tenants->contains('id', $user->current_tenant_id)) {
             $tenant = $user->tenants()->find($user->current_tenant_id);
 
             if ($tenant) {
                 $tenant->makeCurrent();
-                $request->session()->put('tenant_id', $tenant->id);
+                session(['tenant_id' => $tenant->id]);
             }
         } else {
-            $user->update(['current_tenant_id' => null]);
-            $request->session()->forget('tenant_id');
+            // Get the first tenant the user belongs to
+            $firstTenant = $user->tenants()->first();
+
+            if ($firstTenant) {
+                $user->update(['current_tenant_id' => $firstTenant->id]);
+                $firstTenant->makeCurrent();
+                session(['tenant_id' => $firstTenant->id]);
+            } else {
+                // If the user doesn't belong to any tenants, make sure it's null
+                $user->update(['current_tenant_id' => null]);
+            }
         }
 
         return response()->noContent();
     }
+
 
 
     /**
