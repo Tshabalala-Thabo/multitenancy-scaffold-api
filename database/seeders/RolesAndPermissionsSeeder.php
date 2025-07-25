@@ -46,6 +46,7 @@ class RolesAndPermissionsSeeder extends Seeder
             ['email' => 'super@admin.com'],
             [
                 'name' => 'Super Admin',
+                'last_name' => 'User',
                 'password' => Hash::make('password'),
                 'email_verified_at' => now(),
             ]

@@ -2,14 +2,14 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\Traits\HasRoles;
+use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
-//use Spatie\Multitenancy\Models\Concerns\BelongsToTenant;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Spatie\Multitenancy\Models\Concerns\UsesTenantConnection;
-use Spatie\Permission\Traits\HasRoles;
-
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
@@ -18,36 +18,48 @@ class User extends Authenticatable
     protected $guarded = [];
 
     /**
-     * The attributes that are mass assignable.
-     *
-     * @var list<string>
+     * @var string[]
      */
     protected $fillable = [
         'name',
+        'last_name',
         'email',
         'password',
     ];
 
+    /**
+     * @return int|string|null
+     */
     public function getRoleTeamId(): int|string|null
     {
         return tenant()?->id;
     }
 
     /**
-     * Get the tenants that the user belongs to.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     * @return BelongsToMany
      */
-    public function tenants()
+    public function roles(): BelongsToMany
+    {
+        return $this->morphToMany(
+            Role::class,
+            'model',
+            'model_has_roles',
+            'model_id',
+            'role_id'
+        )->withPivot('tenant_id');
+    }
+
+    /**
+     * @return BelongsToMany
+     */
+    public function tenants(): BelongsToMany
     {
         return $this->belongsToMany(Tenant::class)
             ->withTimestamps(); // Track when the relationship was created/updated
     }
 
     /**
-     * The attributes that should be hidden for serialization.
-     *
-     * @var list<string>
+     * @var string[]
      */
     protected $hidden = [
         'password',
@@ -55,9 +67,7 @@ class User extends Authenticatable
     ];
 
     /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
+     * @return string[]
      */
     protected function casts(): array
     {
