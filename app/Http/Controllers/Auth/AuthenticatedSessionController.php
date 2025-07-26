@@ -23,25 +23,17 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerate();
 
         $user = $request->user();
+        $user->load('tenants');
+        $tenant = $user->tenants->find($user->current_tenant_id) ?? $user->tenants->first();
 
-        // Check if current_tenant_id exists and the user belongs to that tenant
-        if ($user->current_tenant_id && $user->tenants->contains('id', $user->current_tenant_id)) {
-            $tenant = $user->tenants()->find($user->current_tenant_id);
-
-            if ($tenant) {
-                $tenant->makeCurrent();
-                session(['tenant_id' => $tenant->id]);
+        if ($tenant) {
+            if ($user->current_tenant_id !== $tenant->id) {
+                $user->update(['current_tenant_id' => $tenant->id]);
             }
+            $tenant->makeCurrent();
+            session(['tenant_id' => $tenant->id]);
         } else {
-            // Get the first tenant the user belongs to
-            $firstTenant = $user->tenants()->first();
-
-            if ($firstTenant) {
-                $user->update(['current_tenant_id' => $firstTenant->id]);
-                $firstTenant->makeCurrent();
-                session(['tenant_id' => $firstTenant->id]);
-            } else {
-                // If the user doesn't belong to any tenants, make sure it's null
+            if ($user->current_tenant_id !== null) {
                 $user->update(['current_tenant_id' => null]);
             }
         }
