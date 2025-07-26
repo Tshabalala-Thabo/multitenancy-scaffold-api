@@ -5,7 +5,7 @@ namespace App\Models;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Traits\HasRoles;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -25,6 +25,7 @@ class User extends Authenticatable
         'last_name',
         'email',
         'password',
+        'current_tenant_id',
     ];
 
     /**
@@ -56,6 +57,14 @@ class User extends Authenticatable
     {
         return $this->belongsToMany(Tenant::class)
             ->withTimestamps(); // Track when the relationship was created/updated
+    }
+
+    /**
+     * @return BelongsTo
+     */
+    public function currentTenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class, 'current_tenant_id');
     }
 
     /**
