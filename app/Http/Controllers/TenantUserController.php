@@ -4,11 +4,63 @@ namespace App\Http\Controllers;
 
 use App\Models\Tenant;
 use App\Models\User;
+use App\Models\Role;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class TenantUserController extends Controller
 {
+    /**
+     * Allow a user to join a tenant.
+     */
+    public function join(Request $request, Tenant $tenant)
+    {
+        $user = $request->user();
+
+        // Check if user is already assigned to this tenant
+        if ($tenant->users()->where('user_id', $user->id)->exists()) {
+            return response()->json([
+                'message' => 'User is already a member of this tenant',
+            ], 422);
+        }
+
+        // Assign user to tenant
+        $tenant->users()->attach($user->id);
+
+        // Assign 'member' role
+        $memberRole = Role::firstOrCreate(['name' => 'member', 'tenant_id' => $tenant->id]);
+        $user->assignRole($memberRole);
+
+        return response()->json([
+            'message' => 'Successfully joined the tenant',
+        ], 200);
+    }
+
+    /**
+     * Allow a user to leave a tenant.
+     */
+    public function leave(Request $request, Tenant $tenant)
+    {
+        $user = $request->user();
+
+        // Check if user is assigned to this tenant
+        if (!$tenant->users()->where('user_id', $user->id)->exists()) {
+            return response()->json([
+                'message' => 'User is not a member of this tenant',
+            ], 422);
+        }
+
+        // Remove user from tenant
+        $tenant->users()->detach($user->id);
+
+        // Remove tenant-specific roles
+        $user->roles()->wherePivot('team_id', $tenant->id)->detach();
+
+
+        return response()->json([
+            'message' => 'Successfully left the tenant',
+        ]);
+    }
     /**
      * Display a listing of users for a specific tenant.
      */
