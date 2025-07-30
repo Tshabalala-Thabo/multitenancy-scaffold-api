@@ -2,79 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\Tenant;
+use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Role;
 
 class TenantUserController extends Controller
 {
     /**
-     * @param Request $request
-     * @param Tenant $tenant
-     * @return Response
-     */
-    public function join(Request $request, Tenant $tenant): Response
-    {
-        $user = $request->user();
-
-        if ($tenant->users()->where('user_id', $user->id)->exists()) {
-            return $this->jsonUnprocessable('User is already a member of this tenant');
-        }
-
-        try {
-            DB::transaction(function () use ($user, $tenant) {
-                $tenant->users()->attach($user->id);
-
-                $memberRole = Role::firstOrCreate([
-                    'name' => 'member',
-                    'tenant_id' => $tenant->id,
-                ]);
-
-                $user->assignRole($memberRole);
-            });
-
-            return $this->jsonSuccess('Successfully joined the tenant');
-        } catch (\Exception $e) {
-            return $this->jsonServerError('Failed to join the tenant. Please try again.');
-        }
-    }
-
-    /**
-     * @param Request $request
-     * @param Tenant $tenant
-     * @return Response
-     */
-    public function leave(Request $request, Tenant $tenant): Response
-    {
-        $user = $request->user();
-
-        if (!$tenant->users()->where('user_id', $user->id)->exists()) {
-            return $this->jsonUnprocessable('User is not a member of this tenant');
-        }
-
-        try {
-            DB::transaction(function () use ($user, $tenant) {
-                $tenant->users()->detach($user->id);
-
-                $user->roles()
-                    ->wherePivot('team_id', $tenant->id)
-                    ->detach();
-            });
-
-            return $this->jsonSuccess('Successfully left the tenant');
-
-        } catch (\Exception $e) {
-            return $this->jsonServerError('Failed to leave the tenant. Please try again.');
-        }
-    }
-
-    /**
-     * @param Tenant $tenant
-     * @return JsonResponse
+     * Display a listing of users for a specific tenant.
      */
     public function index(Tenant $tenant)
     {
