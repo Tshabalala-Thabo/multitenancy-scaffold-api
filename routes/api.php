@@ -23,9 +23,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
         $user = $request->user();
         $user->load([
             'roles',
-            'permissions'
+            'permissions',
+            'tenants'
         ]);
-        return response()->json($user);
+
+        return response()->json(array_merge(
+            $user->toArray(),
+            ['tenant_id' => session('tenant_id'),]
+        ));
     });
     Route::post('/tenants/{tenant}/join', [TenantUserController::class, 'joinTenantAsMember']);
     Route::post('/tenants/{tenant}/leave', [TenantUserController::class, 'leaveTenant']);

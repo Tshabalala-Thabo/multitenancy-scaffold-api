@@ -65,8 +65,22 @@ class TenantUserController extends Controller
                 'tenant_id' => $tenant->id
             ]);
 
+            // Update user's current_tenant_id
+            $user->current_tenant_id = $tenant->id;
+            $user->save();
+
+            // Set tenant_id in the session
+            session(['tenant_id' => $tenant->id]);
+            
             // Commit the transaction if all operations succeed
             DB::commit();
+
+            Log::info('User successfully joined tenant', [
+                'user_id' => $user->id,
+                'tenant_id' => $tenant->id,
+                'current_tenant_updated' => true,
+                'session_updated' => true
+            ]);
 
             return $this->jsonCreated('You have successfully joined the organization as a member');
 
