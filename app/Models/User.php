@@ -24,6 +24,7 @@ class User extends Authenticatable
         'name',
         'last_name',
         'email',
+        'email_verified_at', // TODO: Remove this after implementing email verification
         'password',
         'current_tenant_id',
     ];
