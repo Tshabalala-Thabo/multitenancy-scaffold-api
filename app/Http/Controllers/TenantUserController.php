@@ -2,67 +2,79 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Tenant;
 use App\Models\User;
-use App\Models\Role;
+use App\Models\Tenant;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Role;
 
 class TenantUserController extends Controller
 {
     /**
-     * Allow a user to join a tenant.
+     * @param Request $request
+     * @param Tenant $tenant
+     * @return Response
      */
-    public function join(Request $request, Tenant $tenant)
+    public function join(Request $request, Tenant $tenant): Response
     {
         $user = $request->user();
 
-        // Check if user is already assigned to this tenant
         if ($tenant->users()->where('user_id', $user->id)->exists()) {
-            return response()->json([
-                'message' => 'User is already a member of this tenant',
-            ], 422);
+            return $this->jsonUnprocessable('User is already a member of this tenant');
         }
 
-        // Assign user to tenant
-        $tenant->users()->attach($user->id);
+        try {
+            DB::transaction(function () use ($user, $tenant) {
+                $tenant->users()->attach($user->id);
 
-        // Assign 'member' role
-        $memberRole = Role::firstOrCreate(['name' => 'member', 'tenant_id' => $tenant->id]);
-        $user->assignRole($memberRole);
+                $memberRole = Role::firstOrCreate([
+                    'name' => 'member',
+                    'tenant_id' => $tenant->id,
+                ]);
 
-        return response()->json([
-            'message' => 'Successfully joined the tenant',
-        ], 200);
+                $user->assignRole($memberRole);
+            });
+
+            return $this->jsonSuccess('Successfully joined the tenant');
+        } catch (\Exception $e) {
+            return $this->jsonServerError('Failed to join the tenant. Please try again.');
+        }
     }
 
     /**
-     * Allow a user to leave a tenant.
+     * @param Request $request
+     * @param Tenant $tenant
+     * @return Response
      */
-    public function leave(Request $request, Tenant $tenant)
+    public function leave(Request $request, Tenant $tenant): Response
     {
         $user = $request->user();
 
-        // Check if user is assigned to this tenant
         if (!$tenant->users()->where('user_id', $user->id)->exists()) {
-            return response()->json([
-                'message' => 'User is not a member of this tenant',
-            ], 422);
+            return $this->jsonUnprocessable('User is not a member of this tenant');
         }
 
-        // Remove user from tenant
-        $tenant->users()->detach($user->id);
+        try {
+            DB::transaction(function () use ($user, $tenant) {
+                $tenant->users()->detach($user->id);
 
-        // Remove tenant-specific roles
-        $user->roles()->wherePivot('team_id', $tenant->id)->detach();
+                $user->roles()
+                    ->wherePivot('team_id', $tenant->id)
+                    ->detach();
+            });
 
+            return $this->jsonSuccess('Successfully left the tenant');
 
-        return response()->json([
-            'message' => 'Successfully left the tenant',
-        ]);
+        } catch (\Exception $e) {
+            return $this->jsonServerError('Failed to leave the tenant. Please try again.');
+        }
     }
+
     /**
-     * Display a listing of users for a specific tenant.
+     * @param Tenant $tenant
+     * @return JsonResponse
      */
     public function index(Tenant $tenant)
     {
