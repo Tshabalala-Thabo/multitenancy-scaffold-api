@@ -2,13 +2,84 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Tenant;
 use App\Models\User;
+use App\Models\Tenant;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\Log;
 
 class TenantUserController extends Controller
 {
+
+    /**
+     * @param Request $request
+     * @param Tenant $tenant
+     * @return Response
+     */
+    public function joinTenantAsMember(Request $request, Tenant $tenant): Response
+    {
+        $user = $request->user();
+
+        try {
+
+            Log::info('Inside try');
+
+            if ($tenant->users()->where('user_id', $user->id)->exists()) {
+                return $this->jsonUnprocessable('You are already a member of this organization');
+            }
+
+            Log::info('Joining tenant as member');
+
+            $tenant->users()->attach($user->id);
+
+            $memberRole = Role::where('name', 'member')
+                ->where('tenant_id', $tenant->id)
+                ->firstOrFail();
+
+            // Attach the role with tenant context
+            $user->roles()->attach($memberRole->id, [
+                'tenant_id' => $tenant->id,
+            ]);
+
+
+            return $this->jsonCreated('You have successfully joined the organization as a member');
+        } catch (\Exception $e) {
+            if (app()->environment('local')) {
+                return $this->jsonServerError($e->getMessage());
+            }
+            return $this->jsonServerError('Failed to join organization.');
+        }
+    }
+
+    /**
+     * @param Request $request
+     * @param Tenant $tenant
+     * @return Response
+     */
+    public function leaveTenant(Request $request, Tenant $tenant): Response
+    {
+        $user = $request->user();
+
+        try {
+            if (!$tenant->users()->where('user_id', $user->id)->exists()) {
+                return $this->jsonUnprocessable('You are not a member of this organization');
+            }
+
+            $tenant->users()->detach($user->id);
+
+            $user->roles()->wherePivot('tenant_id', $tenant->id)->detach();
+
+            return $this->jsonSuccess('You have successfully left the organization');
+        } catch (\Exception $e) {
+            if (app()->environment('local')) {
+                return $this->jsonServerError($e->getMessage());
+            }
+            return $this->jsonServerError('Failed to leave organization.');
+        }
+    }
+
     /**
      * Display a listing of users for a specific tenant.
      */

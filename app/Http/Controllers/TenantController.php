@@ -102,6 +102,12 @@ class TenantController extends Controller
                 'guard_name' => 'web',
             ]);
 
+            Role::firstOrCreate([
+                'name' => 'member',
+                'tenant_id' => $tenant->id,
+                'guard_name' => 'web',
+            ]);
+
             Log::info('Start creating tenant users');
 
             foreach ($validated['administrators'] as $adminData) {
@@ -114,7 +120,6 @@ class TenantController extends Controller
 
                 $tenant->users()->attach($admin->id);
 
-                // Attach role with tenant_id to pivot table
                 $admin->roles()->attach($adminRole->id, ['tenant_id' => $tenant->id]);
             }
             $tenant->address()->update($validated['address']);

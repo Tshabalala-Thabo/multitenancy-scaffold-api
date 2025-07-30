@@ -27,19 +27,21 @@ Route::middleware(['auth:sanctum'])->group(function () {
         ]);
         return response()->json($user);
     });
-
+    Route::post('/tenants/{tenant}/join', [TenantUserController::class, 'joinTenantAsMember']);
+    Route::post('/tenants/{tenant}/leave', [TenantUserController::class, 'leaveTenant']);
     Route::apiResource('tenants', TenantController::class);
+
     Route::post('/tenants/switch', [\App\Http\Controllers\SwitchTenantController::class, 'switch']);
     // Tenant management routes (admin only)
-//    Route::middleware(['role:super_admin'])->group(function () {
-//        Route::apiResource('tenants', TenantController::class)->except(['index']);
-//
-//        // Tenant-user management
-//        Route::get('tenants/{tenant}/users', [TenantUserController::class, 'index']);
-//        Route::post('tenants/{tenant}/users', [TenantUserController::class, 'assignUser']);
-//        Route::delete('tenants/{tenant}/users/{user}', [TenantUserController::class, 'removeUser']);
-//        Route::put('tenants/{tenant}/users/{user}/roles', [TenantUserController::class, 'updateRoles']);
-//    });
+    //    Route::middleware(['role:super_admin'])->group(function () {
+    //        Route::apiResource('tenants', TenantController::class)->except(['index']);
+    //
+    //        // Tenant-user management
+    //        Route::get('tenants/{tenant}/users', [TenantUserController::class, 'index']);
+    //        Route::post('tenants/{tenant}/users', [TenantUserController::class, 'assignUser']);
+    //        Route::delete('tenants/{tenant}/users/{user}', [TenantUserController::class, 'removeUser']);
+    //        Route::put('tenants/{tenant}/users/{user}/roles', [TenantUserController::class, 'updateRoles']);
+    //    });
 });
 
 // Tenant-specific routes
