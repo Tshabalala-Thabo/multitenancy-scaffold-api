@@ -16,9 +16,7 @@ use Illuminate\Support\Facades\Route;
  * |
  */
 
-// Protected routes
 Route::middleware(['auth:sanctum'])->group(function () {
-    // User routes
     Route::get('/user', function (Request $request) {
         $user = $request->user();
         $user->load([
@@ -27,11 +25,26 @@ Route::middleware(['auth:sanctum'])->group(function () {
             'tenants'
         ]);
 
+        $organisations = $user->tenants->map(function ($tenant) {
+            return [
+                'id' => $tenant->id,
+                'name' => $tenant->name,
+                'logo_url' => $tenant->getLogoUrl(),
+            ];
+        });
+
+        $userData = $user->toArray();
+        unset($userData['tenants']);
+
         return response()->json(array_merge(
-            $user->toArray(),
-            ['tenant_id' => session('tenant_id'),]
+            $userData,
+            [
+                'organisations' => $organisations,
+                'tenant_id' => session('tenant_id'),
+            ]
         ));
     });
+    
     Route::post('/tenants/{tenant}/join', [TenantUserController::class, 'joinTenantAsMember']);
     Route::post('/tenants/{tenant}/leave', [TenantUserController::class, 'leaveTenant']);
     Route::apiResource('tenants', TenantController::class);
