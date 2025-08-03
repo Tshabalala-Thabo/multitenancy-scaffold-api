@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Models\Tenant;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Log;
@@ -71,7 +73,7 @@ class TenantUserController extends Controller
 
             // Set tenant_id in the session
             session(['tenant_id' => $tenant->id]);
-            
+
             // Commit the transaction if all operations succeed
             DB::commit();
 
@@ -87,7 +89,7 @@ class TenantUserController extends Controller
         } catch (\Exception $e) {
             // Rollback the transaction on error
             DB::rollBack();
-            
+
             Log::error('Failed to join organization', [
                 'user_id' => $user->id ?? null,
                 'tenant_id' => $tenant->id ?? null,
@@ -98,7 +100,7 @@ class TenantUserController extends Controller
             if (app()->environment('local')) {
                 return $this->jsonServerError($e->getMessage());
             }
-            
+
             return $this->jsonServerError('Failed to join organization. Please try again later.');
         }
     }
@@ -117,9 +119,31 @@ class TenantUserController extends Controller
                 return $this->jsonUnprocessable('You are not a member of this organization');
             }
 
-            $tenant->users()->detach($user->id);
+            $isAdmin = $user->roles()
+                ->wherePivot('tenant_id', $tenant->id)
+                ->where('name', 'administrator')
+                ->exists();
 
+            if ($isAdmin) {
+                return $this->jsonUnprocessable('Administrators cannot leave the organization.');
+            }
+
+            DB::beginTransaction();
+
+            $tenant->users()->detach($user->id);
             $user->roles()->wherePivot('tenant_id', $tenant->id)->detach();
+
+            $nextTenant = $user->tenants()->first();
+            
+            if ($nextTenant) {
+                $user->update(['current_tenant_id' => $nextTenant->id]);
+                $request->session()->put('tenant_id', $nextTenant->id);
+            } else {
+                $user->update(['current_tenant_id' => null]);
+                $request->session()->forget('tenant_id');
+            }
+
+            DB::commit();
 
             return $this->jsonSuccess('You have successfully left the organization');
         } catch (\Exception $e) {
@@ -129,6 +153,53 @@ class TenantUserController extends Controller
             return $this->jsonServerError('Failed to leave organization.');
         }
     }
+
+    /**
+     * @param Request $request
+     * @return JsonResponse|Response
+     */
+    public function switch(Request $request): Response|JsonResponse
+    {
+        try {
+            $request->validate([
+                'tenant_id' => 'required|exists:tenants,id',
+            ]);
+
+            $user = Auth::user();
+            $tenant = Tenant::find($request->tenant_id);
+
+            if (!$tenant) {
+                return $this->jsonServerError('Tenant not found.');
+            }
+
+            if ($user->tenants->contains('id', $tenant->id)) {
+                DB::beginTransaction();
+
+                $user->update(['current_tenant_id' => $tenant->id]);
+                $tenant->makeCurrent();
+                $request->session()->put('tenant_id', $tenant->id);
+
+                DB::commit();
+                return $this->jsonNoContent();
+            }
+
+            DB::beginTransaction();
+            $user->update(['current_tenant_id' => null]);
+            $request->session()->forget('tenant_id');
+            DB::commit();
+
+            return $this->jsonServerError('You do not have access to this tenant.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            if (app()->environment('local')) {
+                return $this->jsonServerError($e->getMessage());
+            }
+
+            return $this->jsonServerError('Failed to switch tenant. Please try again later.');
+        }
+    }
+
 
     /**
      * Display a listing of users for a specific tenant.

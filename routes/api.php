@@ -44,12 +44,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
             ]
         ));
     });
-    
+
     Route::post('/tenants/{tenant}/join', [TenantUserController::class, 'joinTenantAsMember']);
     Route::post('/tenants/{tenant}/leave', [TenantUserController::class, 'leaveTenant']);
     Route::apiResource('tenants', TenantController::class);
 
-    Route::post('/tenants/switch', [\App\Http\Controllers\SwitchTenantController::class, 'switch']);
+    Route::post('/tenants/switch', [TenantUserController::class, 'switch']);
     // Tenant management routes (admin only)
     //    Route::middleware(['role:super_admin'])->group(function () {
     //        Route::apiResource('tenants', TenantController::class)->except(['index']);
