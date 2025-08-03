@@ -22,14 +22,22 @@ class TenantController extends Controller
     public function index(): Response|JsonResponse
     {
         try {
-            $tenants = Tenant::with(['address', 'users'])->get()->map(function ($tenant) {
+            $user = auth()->user();
+
+            $query = Tenant::with(['address', 'users']);
+
+            if (!$user->hasRole('super_admin')) {
+                $userTenantIds = $user->tenants->pluck('id');
+                $query->whereNotIn('id', $userTenantIds);
+            }
+
+            $tenants = $query->get()->map(function ($tenant) {
                 $tenantArray = $tenant->toArray();
                 $tenantArray['logo_url'] = $tenant->getLogoUrl();
 
                 $tenantArray['users'] = $tenant->users->map(function ($user) use ($tenant) {
                     $userArray = $user->toArray();
 
-                    // Manually fetch roles for this tenant
                     $userArray['roles'] = $user
                         ->roles()
                         ->wherePivot('tenant_id', $tenant->id)
@@ -102,6 +110,12 @@ class TenantController extends Controller
                 'guard_name' => 'web',
             ]);
 
+            Role::firstOrCreate([
+                'name' => 'member',
+                'tenant_id' => $tenant->id,
+                'guard_name' => 'web',
+            ]);
+
             Log::info('Start creating tenant users');
 
             foreach ($validated['administrators'] as $adminData) {
@@ -109,12 +123,12 @@ class TenantController extends Controller
                     'name' => $adminData['name'],
                     'last_name' => $adminData['last_name'],
                     'email' => $adminData['email'],
+                    'email_verified_at' => now(),
                     'password' => Hash::make($adminData['password']),
                 ]);
 
                 $tenant->users()->attach($admin->id);
 
-                // Attach role with tenant_id to pivot table
                 $admin->roles()->attach($adminRole->id, ['tenant_id' => $tenant->id]);
             }
             $tenant->address()->update($validated['address']);
