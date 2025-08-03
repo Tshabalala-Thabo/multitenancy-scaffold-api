@@ -2,19 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use App\Models\Tenant;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Spatie\Permission\Models\Role;
 use Illuminate\Support\Facades\Log;
+use Spatie\Permission\Models\Role;
 
 class TenantUserController extends Controller
 {
-
     /**
      * @param Request $request
      * @param Tenant $tenant
@@ -24,21 +23,13 @@ class TenantUserController extends Controller
     {
         $user = $request->user();
 
-        // Start database transaction
-        DB::beginTransaction();
-
         try {
-            Log::info('Attempting to join tenant as member', [
-                'user_id' => $user->id,
-                'tenant_id' => $tenant->id
-            ]);
+            DB::beginTransaction();
 
-            // Check if user is already a member
             if ($tenant->users()->where('user_id', $user->id)->exists()) {
                 return $this->jsonUnprocessable('You are already a member of this organization');
             }
 
-            // Get the member role for this tenant
             $memberRole = Role::where('name', 'member')
                 ->where('tenant_id', $tenant->id)
                 ->first();
@@ -50,14 +41,12 @@ class TenantUserController extends Controller
                 return $this->jsonServerError('Member role not found for this organization', 500);
             }
 
-            // Attach user to tenant
             $tenant->users()->attach($user->id);
             Log::info('User attached to tenant', [
                 'user_id' => $user->id,
                 'tenant_id' => $tenant->id
             ]);
 
-            // Attach the role with tenant context
             $user->roles()->attach($memberRole->id, [
                 'tenant_id' => $tenant->id,
             ]);
@@ -67,36 +56,17 @@ class TenantUserController extends Controller
                 'tenant_id' => $tenant->id
             ]);
 
-            // Update user's current_tenant_id
             $user->current_tenant_id = $tenant->id;
             $user->save();
 
-            // Set tenant_id in the session
             session(['tenant_id' => $tenant->id]);
 
-            // Commit the transaction if all operations succeed
             DB::commit();
 
-            Log::info('User successfully joined tenant', [
-                'user_id' => $user->id,
-                'tenant_id' => $tenant->id,
-                'current_tenant_updated' => true,
-                'session_updated' => true
-            ]);
-
             return $this->jsonCreated('You have successfully joined the organization as a member');
-
         } catch (\Exception $e) {
             // Rollback the transaction on error
             DB::rollBack();
-
-            Log::error('Failed to join organization', [
-                'user_id' => $user->id ?? null,
-                'tenant_id' => $tenant->id ?? null,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
             if (app()->environment('local')) {
                 return $this->jsonServerError($e->getMessage());
             }
@@ -119,7 +89,8 @@ class TenantUserController extends Controller
                 return $this->jsonUnprocessable('You are not a member of this organization');
             }
 
-            $isAdmin = $user->roles()
+            $isAdmin = $user
+                ->roles()
                 ->wherePivot('tenant_id', $tenant->id)
                 ->where('name', 'administrator')
                 ->exists();
@@ -133,7 +104,7 @@ class TenantUserController extends Controller
             $tenant->users()->detach($user->id);
             $user->roles()->wherePivot('tenant_id', $tenant->id)->detach();
 
-            $nextTenant = $user->tenants()->first();
+            $nextTenant = $user->tenants()->orderBy('created_at')->first();
             
             if ($nextTenant) {
                 $user->update(['current_tenant_id' => $nextTenant->id]);
@@ -147,6 +118,7 @@ class TenantUserController extends Controller
 
             return $this->jsonSuccess('You have successfully left the organization');
         } catch (\Exception $e) {
+            DB::rollBack();
             if (app()->environment('local')) {
                 return $this->jsonServerError($e->getMessage());
             }
@@ -183,11 +155,6 @@ class TenantUserController extends Controller
                 return $this->jsonNoContent();
             }
 
-            DB::beginTransaction();
-            $user->update(['current_tenant_id' => null]);
-            $request->session()->forget('tenant_id');
-            DB::commit();
-
             return $this->jsonServerError('You do not have access to this tenant.');
         } catch (\Exception $e) {
             DB::rollBack();
@@ -199,7 +166,6 @@ class TenantUserController extends Controller
             return $this->jsonServerError('Failed to switch tenant. Please try again later.');
         }
     }
-
 
     /**
      * Display a listing of users for a specific tenant.
