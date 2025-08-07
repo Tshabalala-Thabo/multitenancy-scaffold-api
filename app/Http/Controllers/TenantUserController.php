@@ -10,6 +10,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class TenantUserController extends Controller
@@ -105,7 +106,7 @@ class TenantUserController extends Controller
             $user->roles()->wherePivot('tenant_id', $tenant->id)->detach();
 
             $nextTenant = $user->tenants()->orderBy('created_at')->first();
-            
+
             if ($nextTenant) {
                 $user->update(['current_tenant_id' => $nextTenant->id]);
                 $request->session()->put('tenant_id', $nextTenant->id);
@@ -166,6 +167,37 @@ class TenantUserController extends Controller
             return $this->jsonServerError('Failed to switch tenant. Please try again later.');
         }
     }
+
+    /**
+     * @param Tenant $tenant
+     * @return Response|JsonResponse
+     */
+    public function getTenantSettings(Tenant $tenant): Response|JsonResponse
+    {
+        try {
+            $tenant = Tenant::with([
+                'address',
+                'roles.permissions'
+            ])->find($tenant->id);
+
+            $allPermissions = Permission::all();
+
+            $tenantData = $tenant->toArray();
+            $tenantData['logo_url'] = $tenant->getLogoUrl();
+            $tenantData['permissions'] = $allPermissions;
+
+            return $this->json($tenantData);
+        } catch (\Exception $ex) {
+            if (app()->environment('local')) {
+                return response()->json([
+                    'message' => 'Failed to retrieve tenant.',
+                    'error' => $ex->getMessage(),
+                ], 500);
+            }
+            return $this->jsonServerError('Failed to retrieve tenant.');
+        }
+    }
+
 
     /**
      * Display a listing of users for a specific tenant.

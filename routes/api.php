@@ -4,6 +4,7 @@ use App\Http\Controllers\TenantController;
 use App\Http\Controllers\TenantUserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Spatie\Permission\Models\Permission;
 
 /*
  * |--------------------------------------------------------------------------
@@ -19,11 +20,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user', function (Request $request) {
         $user = $request->user();
-        $user->load([
-            'roles',
-            'permissions',
-            'tenants'
-        ]);
+        $user->load(['roles', 'tenants']);
 
         $organisations = $user->tenants->map(function ($tenant) {
             return [
@@ -33,12 +30,39 @@ Route::middleware(['auth:sanctum'])->group(function () {
             ];
         });
 
+        $permissions = collect();
+
+        foreach ($user->tenants as $tenant) {
+            $roleIds = $user->roles()
+                ->wherePivot('tenant_id', $tenant->id)
+                ->pluck('roles.id');
+
+            $tenantPermissions = Permission::whereHas('roles', function ($q) use ($roleIds) {
+                $q->whereIn('roles.id', $roleIds);
+            })->get()->map(function ($permission) use ($tenant) {
+                return [
+                    'id' => $permission->id,
+                    'name' => $permission->name,
+                    'category' => $permission->category ?? null,
+                    'description' => $permission->description ?? null,
+                    'tenant_id' => $tenant->id,
+                ];
+            });
+
+            $permissions = $permissions->merge($tenantPermissions);
+        }
+
+        $permissions = $permissions->unique(function ($perm) {
+            return $perm['id'] . '-' . $perm['tenant_id'];
+        })->values();
+
         $userData = $user->toArray();
         unset($userData['tenants']);
 
         return response()->json(array_merge(
             $userData,
             [
+                'permissions' => $permissions,
                 'organisations' => $organisations,
                 'tenant_id' => session('tenant_id'),
             ]
@@ -47,6 +71,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     Route::post('/tenants/{tenant}/join', [TenantUserController::class, 'joinTenantAsMember']);
     Route::post('/tenants/{tenant}/leave', [TenantUserController::class, 'leaveTenant']);
+    Route::get('/tenants/{tenant}/settings', [TenantUserController::class, 'getTenantSettings']);
     Route::apiResource('tenants', TenantController::class);
 
     Route::post('/tenants/switch', [TenantUserController::class, 'switch']);

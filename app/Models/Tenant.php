@@ -3,8 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Multitenancy\Models\Tenant as BaseTenant;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class Tenant extends BaseTenant
 {
@@ -22,6 +25,33 @@ class Tenant extends BaseTenant
         'slug',
         'domain',
         'logo_path',
+        'description',
+        'privacy_setting',
+        'two_factor_auth_required',
+        'password_policy',
+        'features',
+    ];
+
+    protected $casts = [
+        'two_factor_auth_required' => 'boolean',
+        'password_policy' => 'array',
+        'features' => 'array',
+    ];
+
+    protected $attributes = [
+        'privacy_setting' => 'private',
+        'two_factor_auth_required' => false,
+        'password_policy' => '{
+            "min_length": 8,
+            "requires_uppercase": true,
+            "requires_lowercase": true,
+            "requires_number": true,
+            "requires_symbol": true
+        }',
+        'features' => '{
+            "announcements_enabled": true,
+            "analytics_enabled": false
+        }'
     ];
 
     /**
@@ -76,6 +106,22 @@ class Tenant extends BaseTenant
     {
         return $this->belongsToMany(User::class)
             ->withTimestamps();
+    }
+
+    /**
+     * @return HasMany
+     */
+    public function roles(): HasMany
+    {
+        return $this->hasMany(Role::class);
+    }
+
+    /**
+     * @return HasMany
+     */
+    public function permissions(): HasMany
+    {
+        return $this->hasMany(Permission::class);
     }
 
     /**

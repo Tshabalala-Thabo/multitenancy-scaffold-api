@@ -2,17 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Tenant;
 use App\Models\User;
-use Illuminate\Http\JsonResponse;
+use App\Models\Tenant;
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Hash;
+use Spatie\Permission\Models\Permission;
 
 class TenantController extends Controller
 {
@@ -115,6 +116,45 @@ class TenantController extends Controller
                 'tenant_id' => $tenant->id,
                 'guard_name' => 'web',
             ]);
+
+            Role::firstOrCreate([
+                'name' => 'chief_executive_officer',
+                'tenant_id' => $tenant->id,
+                'guard_name' => 'web',
+            ]);
+
+            $settingsPermission = Permission::firstOrCreate([
+                'name' => 'settings:manage',
+                'guard_name' => 'web',
+            ]);
+
+            $announcementsManagePermission = Permission::firstOrCreate([
+                'name' => 'announcements:manage',
+                'guard_name' => 'web',
+            ]);
+
+            $announcementsCreatePermission = Permission::firstOrCreate([
+                'name' => 'announcements:create',
+                'guard_name' => 'web',
+            ]);
+
+            $announcementsEditPermission = Permission::firstOrCreate([
+                'name' => 'announcements:edit',
+                'guard_name' => 'web',
+            ]);
+
+            $announcementsDeletePermission = Permission::firstOrCreate([
+                'name' => 'announcements:delete',
+                'guard_name' => 'web',
+            ]);
+
+            $announcementsViewPermission = Permission::firstOrCreate([
+                'name' => 'announcements:view',
+                'guard_name' => 'web',
+            ]);
+
+            $adminRole->givePermissionTo($settingsPermission);
+            $adminRole->givePermissionTo($announcementsManagePermission);
 
             Log::info('Start creating tenant users');
 
