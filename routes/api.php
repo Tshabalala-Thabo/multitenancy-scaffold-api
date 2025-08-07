@@ -33,21 +33,18 @@ Route::middleware(['auth:sanctum'])->group(function () {
         $permissions = collect();
 
         foreach ($user->tenants as $tenant) {
-            $roleIds = $user->roles()
-                ->wherePivot('tenant_id', $tenant->id)
-                ->pluck('roles.id');
-
-            $tenantPermissions = Permission::whereHas('roles', function ($q) use ($roleIds) {
-                $q->whereIn('roles.id', $roleIds);
-            })->get()->map(function ($permission) use ($tenant) {
-                return [
-                    'id' => $permission->id,
-                    'name' => $permission->name,
-                    'category' => $permission->category ?? null,
-                    'description' => $permission->description ?? null,
-                    'tenant_id' => $tenant->id,
-                ];
-            });
+            $tenantPermissions = $user->roles
+                ->where('pivot.tenant_id', $tenant->id)
+                ->flatMap(fn($role) => $role->permissions)
+                ->map(function ($permission) use ($tenant) {
+                    return [
+                        'id' => $permission->id,
+                        'name' => $permission->name,
+                        'category' => $permission->category ?? null,
+                        'description' => $permission->description ?? null,
+                        'tenant_id' => $tenant->id,
+                    ];
+                });
 
             $permissions = $permissions->merge($tenantPermissions);
         }

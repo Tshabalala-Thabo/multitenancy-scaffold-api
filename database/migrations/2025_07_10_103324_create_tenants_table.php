@@ -26,18 +26,4 @@ return new class extends Migration {
     {
         Schema::dropIfExists('tenants');
     }
-
-    protected function createAddressTable(): void
-    {
-        Schema::create('addresses', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
-            $table->string('street_address');
-            $table->string('suburb');
-            $table->string('city');
-            $table->string('province');
-            $table->string('postal_code');
-            $table->timestamps();
-        });
-    }
 };

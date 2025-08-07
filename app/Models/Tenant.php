@@ -117,14 +117,6 @@ class Tenant extends BaseTenant
     }
 
     /**
-     * @return HasMany
-     */
-    public function permissions(): HasMany
-    {
-        return $this->hasMany(Permission::class);
-    }
-
-    /**
      * Make the tenant current.
      *
      * @return $this

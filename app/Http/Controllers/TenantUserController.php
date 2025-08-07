@@ -175,10 +175,10 @@ class TenantUserController extends Controller
     public function getTenantSettings(Tenant $tenant): Response|JsonResponse
     {
         try {
-            $tenant = Tenant::with([
+            $tenant->load([
                 'address',
                 'roles.permissions'
-            ])->find($tenant->id);
+            ]);
 
             $allPermissions = Permission::all();
 

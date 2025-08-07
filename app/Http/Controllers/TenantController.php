@@ -123,38 +123,20 @@ class TenantController extends Controller
                 'guard_name' => 'web',
             ]);
 
-            $settingsPermission = Permission::firstOrCreate([
-                'name' => 'settings:manage',
-                'guard_name' => 'web',
-            ]);
+            $permissionNames = [
+                'settings:manage',
+                'announcements:manage',
+                'announcements:create',
+                'announcements:edit',
+                'announcements:delete',
+                'announcements:view',
+            ];
 
-            $announcementsManagePermission = Permission::firstOrCreate([
-                'name' => 'announcements:manage',
-                'guard_name' => 'web',
-            ]);
+            foreach ($permissionNames as $name) {
+                Permission::firstOrCreate(['name' => $name, 'guard_name' => 'web']);
+            }
 
-            $announcementsCreatePermission = Permission::firstOrCreate([
-                'name' => 'announcements:create',
-                'guard_name' => 'web',
-            ]);
-
-            $announcementsEditPermission = Permission::firstOrCreate([
-                'name' => 'announcements:edit',
-                'guard_name' => 'web',
-            ]);
-
-            $announcementsDeletePermission = Permission::firstOrCreate([
-                'name' => 'announcements:delete',
-                'guard_name' => 'web',
-            ]);
-
-            $announcementsViewPermission = Permission::firstOrCreate([
-                'name' => 'announcements:view',
-                'guard_name' => 'web',
-            ]);
-
-            $adminRole->givePermissionTo($settingsPermission);
-            $adminRole->givePermissionTo($announcementsManagePermission);
+            $adminRole->givePermissionTo(['settings:manage', 'announcements:manage']);
 
             Log::info('Start creating tenant users');
 
