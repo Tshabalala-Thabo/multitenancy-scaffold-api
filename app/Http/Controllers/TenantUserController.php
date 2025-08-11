@@ -10,6 +10,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -195,6 +196,63 @@ class TenantUserController extends Controller
                 ], 500);
             }
             return $this->jsonServerError('Failed to retrieve tenant.');
+        }
+    }
+
+    /**
+     * Update the basic information of a tenant
+     *
+     * @param Request $request
+     * @param Tenant $tenant
+     * @return JsonResponse|Response
+     */
+    public function updateBasicInfo(Request $request, Tenant $tenant): Response|JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'domain' => 'required|string|max:255|unique:tenants,domain,' . $tenant->id,
+                'address' => 'required|array',
+                'address.street_address' => 'required|string|max:255',
+                'address.suburb' => 'required|string|max:255',
+                'address.city' => 'required|string|max:255',
+                'address.province' => 'required|string|max:255',
+                'address.postal_code' => 'required|string|max:20',
+            ]);
+
+            DB::beginTransaction();
+
+            // Update tenant basic info
+            $tenant->update([
+                'name' => $validated['name'],
+                'domain' => $validated['domain'],
+            ]);
+
+            // Update or create address
+            if ($tenant->address) {
+                $tenant->address()->update($validated['address']);
+            } else {
+                $tenant->address()->create($validated['address']);
+            }
+
+            DB::commit();
+
+            return $this->jsonSuccess('Tenant information updated successfully');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            DB::rollBack();
+
+            return $this->jsonUnprocessable($e->errors());
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            if (app()->environment('local')) {
+                return response()->json([
+                    'message' => 'Failed to update tenant information',
+                    'error' => $e->getMessage(),
+                ], 500);
+            }
+
+            return $this->jsonServerError('Failed to update tenant information. Please try again later.');
         }
     }
 
