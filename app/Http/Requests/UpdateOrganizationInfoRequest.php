@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Contracts\Validation\ValidationRule;
 
 class UpdateOrganizationInfoRequest extends FormRequest
 {
@@ -12,13 +13,21 @@ class UpdateOrganizationInfoRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true; // Authorization is handled by the controller
+        $user = $this->user();
+        $tenant = $this->route('tenant');
+
+        $hasTenantPermission = $user->roles
+            ->where('pivot.tenant_id', $tenant->id)
+            ->flatMap(fn($role) => $role->permissions)
+            ->contains(fn($perm) => $perm->name === 'settings:manage');
+        return $hasTenantPermission;
     }
+
 
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array|string>
+     * @return array<string, ValidationRule|array|string>
      */
     public function rules(): array
     {
