@@ -73,10 +73,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/tenants/{tenant}/leave', [TenantUserController::class, 'leaveTenant']);
     Route::get('/tenants/{tenant}/settings', [TenantUserController::class, 'getTenantSettings']);
     Route::put('/tenants/{tenant}/basic-info', [TenantUserController::class, 'updateBasicInfo']);
-    Route::patch('/tenants/{tenant}/access-control', [TenantUserController::class, 'updateAccessControl']);
+    Route::put('/tenants/{tenant}/access-control', [TenantUserController::class, 'updateAccessControl']);
     Route::patch('/tenants/{tenant}/permissions', [TenantUserController::class, 'updatePermissions']);
     Route::post('/tenants/{tenant}/logo', [TenantUserController::class, 'uploadLogo']);
-
-
 });
 
