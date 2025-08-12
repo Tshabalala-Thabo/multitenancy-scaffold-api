@@ -13,9 +13,9 @@ use Illuminate\Support\Facades\Log;
 use App\Services\TenantUserService;
 use Illuminate\Support\Facades\Auth;
 use Spatie\Permission\Models\Permission;
-use Illuminate\Support\Facades\Validator;
-use App\Http\Requests\UpdateOrganizationInfoRequest;
 use App\Http\Requests\UpdateAccessControlRequest;
+use App\Http\Requests\UpdateOrganizationInfoRequest;
+
 
 class TenantUserController extends Controller
 {
@@ -29,7 +29,7 @@ class TenantUserController extends Controller
     public function __construct(TenantUserService $tenantUserService)
     {
         $this->tenantUserService = $tenantUserService;
-        //$this->middleware('permission:settings:manage')->only(['updateAccessControl', 'getTenantSettings', 'updateBasicInfo']);
+        $this->middleware('tenant_permission:settings:manage')->only(['getTenantSettings', 'updateBasicInfo', 'updateAccessControl']);
     }
 
     /**
