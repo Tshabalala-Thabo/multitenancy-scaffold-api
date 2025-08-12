@@ -10,8 +10,6 @@ use Illuminate\Support\Facades\Log;
 class TenantUserService
 {
     /**
-     * Update organization information including logo and address
-     *
      * @param Tenant $tenant
      * @param array $validated
      * @param UploadedFile|null $logoFile
@@ -42,8 +40,6 @@ class TenantUserService
     }
 
     /**
-     * Handle logo upload and removal
-     *
      * @param Tenant $tenant
      * @param UploadedFile|null $logoFile
      * @param bool $removeLogo
@@ -51,24 +47,19 @@ class TenantUserService
      */
     protected function handleLogoOperations(Tenant $tenant, ?UploadedFile $logoFile = null, bool $removeLogo = false): void
     {
-        // Handle logo upload
-        if ($logoFile) {
-            Log::info('Uploading tenant logo', ['tenant_id' => $tenant->id]);
-            $tenant->storeLogo($logoFile);
-        }
-
-        // Handle logo removal
         if ($removeLogo) {
             Log::info('Removing tenant logo', ['tenant_id' => $tenant->id]);
             $tenant->deleteLogo();
             $tenant->logo_path = null;
             $tenant->save();
+        } elseif ($logoFile) {
+            Log::info('Uploading tenant logo', ['tenant_id' => $tenant->id]);
+            $tenant->storeLogo($logoFile);
         }
     }
 
     /**
-     * Update or create address for the tenant
-     *
+     * 
      * @param Tenant $tenant
      * @param array $addressData
      * @return void
