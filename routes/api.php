@@ -66,31 +66,17 @@ Route::middleware(['auth:sanctum'])->group(function () {
         ));
     });
 
-    Route::post('/tenants/{tenant}/join', [TenantUserController::class, 'joinTenantAsMember']);
-    Route::post('/tenants/{tenant}/leave', [TenantUserController::class, 'leaveTenant']);
-    Route::get('/tenants/{tenant}/settings', [TenantUserController::class, 'getTenantSettings']);
     Route::apiResource('tenants', TenantController::class);
 
     Route::post('/tenants/switch', [TenantUserController::class, 'switch']);
-    // Tenant management routes (admin only)
-    //    Route::middleware(['role:super_admin'])->group(function () {
-    //        Route::apiResource('tenants', TenantController::class)->except(['index']);
-    //
-    //        // Tenant-user management
-    //        Route::get('tenants/{tenant}/users', [TenantUserController::class, 'index']);
-    //        Route::post('tenants/{tenant}/users', [TenantUserController::class, 'assignUser']);
-    //        Route::delete('tenants/{tenant}/users/{user}', [TenantUserController::class, 'removeUser']);
-    //        Route::put('tenants/{tenant}/users/{user}/roles', [TenantUserController::class, 'updateRoles']);
-    //    });
+    Route::post('/tenants/{tenant}/join', [TenantUserController::class, 'joinTenantAsMember']);
+    Route::post('/tenants/{tenant}/leave', [TenantUserController::class, 'leaveTenant']);
+    Route::get('/tenants/{tenant}/settings', [TenantUserController::class, 'getTenantSettings']);
+    Route::put('/tenants/{tenant}/basic-info', [TenantUserController::class, 'updateBasicInfo']);
+    Route::patch('/tenants/{tenant}/access-control', [TenantUserController::class, 'updateAccessControl']);
+    Route::patch('/tenants/{tenant}/permissions', [TenantUserController::class, 'updatePermissions']);
+    Route::post('/tenants/{tenant}/logo', [TenantUserController::class, 'uploadLogo']);
+
+
 });
 
-// Tenant-specific routes
-Route::middleware(['auth:sanctum', 'multitenancy'])->prefix('tenant')->group(function () {
-    // These routes will only be accessible when a tenant is active
-    Route::get('/dashboard', function () {
-        return response()->json([
-            'tenant' => tenant()->only(['id', 'name', 'slug']),
-            'message' => 'Welcome to the tenant dashboard',
-        ]);
-    });
-});

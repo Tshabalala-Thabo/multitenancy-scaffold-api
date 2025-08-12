@@ -2,16 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Tenant;
 use App\Models\User;
-use Illuminate\Http\JsonResponse;
+use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\Log;
+use App\Services\TenantUserService;
+use Illuminate\Support\Facades\Auth;
+use Spatie\Permission\Models\Permission;
+use Illuminate\Support\Facades\Validator;
+use App\Http\Requests\UpdateOrganizationInfoRequest;
 
 class TenantUserController extends Controller
 {
@@ -142,7 +145,7 @@ class TenantUserController extends Controller
             $tenant = Tenant::find($request->tenant_id);
 
             if (!$tenant) {
-                return $this->jsonServerError('Tenant not found.');
+                return $this->jsonServerError('Organization not found.');
             }
 
             if ($user->tenants->contains('id', $tenant->id)) {
@@ -156,7 +159,7 @@ class TenantUserController extends Controller
                 return $this->jsonNoContent();
             }
 
-            return $this->jsonServerError('You do not have access to this tenant.');
+            return $this->jsonServerError('You do not have access to this organization.');
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -164,7 +167,7 @@ class TenantUserController extends Controller
                 return $this->jsonServerError($e->getMessage());
             }
 
-            return $this->jsonServerError('Failed to switch tenant. Please try again later.');
+            return $this->jsonServerError('Failed to switch organization. Please try again later.');
         }
     }
 
@@ -198,6 +201,62 @@ class TenantUserController extends Controller
         }
     }
 
+    /**
+     * @var TenantUserService
+     */
+    protected $tenantUserService;
+
+    /**
+     * @param TenantUserService $tenantUserService
+     */
+    public function __construct(TenantUserService $tenantUserService)
+    {
+        $this->tenantUserService = $tenantUserService;
+    }
+
+    /**
+     * Update the basic information of an organization
+     *
+     * @param UpdateOrganizationInfoRequest $request
+     * @param Tenant $tenant
+     * @return JsonResponse|Response
+     */
+    public function updateBasicInfo(UpdateOrganizationInfoRequest $request, Tenant $tenant): Response|JsonResponse
+    {
+        DB::beginTransaction();
+
+        try {
+            $validated = $request->validated();
+
+            $tenantData = $this->tenantUserService->updateOrganizationInfo(
+                tenant: $tenant,
+                validated: $validated,
+                logoFile: $request->file('logo'),
+                removeLogo: $request->boolean('remove_logo')
+            );
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Organisation information updated successfully',
+                'data' => $tenantData
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            if (app()->environment('local')) {
+                return response()->json([
+                    'message' => 'Failed to update organisation information',
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ], 500);
+            }
+
+            return $this->jsonServerError('Failed to update organisation information. Please try again later.');
+        }
+    }
+
 
     /**
      * Display a listing of users for a specific tenant.
@@ -222,10 +281,10 @@ class TenantUserController extends Controller
 
         $user = User::findOrFail($validated['user_id']);
 
-        // Check if user is already assigned to this tenant
+        // Check if user is already assigned to this organisation
         if ($tenant->users()->where('user_id', $user->id)->exists()) {
             return response()->json([
-                'message' => 'User is already assigned to this tenant',
+                'message' => 'User is already assigned to this organisation',
             ], 422);
         }
 
@@ -240,7 +299,7 @@ class TenantUserController extends Controller
         }
 
         return response()->json([
-            'message' => 'User assigned to tenant successfully',
+            'message' => 'User assigned to organisation successfully',
         ], 201);
     }
 
@@ -252,7 +311,7 @@ class TenantUserController extends Controller
         // Check if user is assigned to this tenant
         if (!$tenant->users()->where('user_id', $user->id)->exists()) {
             return response()->json([
-                'message' => 'User is not assigned to this tenant',
+                'message' => 'User is not assigned to this organisation',
             ], 422);
         }
 
@@ -263,7 +322,7 @@ class TenantUserController extends Controller
         $user->roles()->wherePivot('team_id', $tenant->id)->detach();
 
         return response()->json([
-            'message' => 'User removed from tenant successfully',
+            'message' => 'User removed from organisation successfully',
         ]);
     }
 
