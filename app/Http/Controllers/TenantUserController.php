@@ -2,17 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Tenant;
 use App\Models\User;
-use Illuminate\Http\JsonResponse;
+use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Validator;
-use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
+use Illuminate\Support\Facades\Log;
+use App\Services\TenantUserService;
+use Illuminate\Support\Facades\Auth;
+use Spatie\Permission\Models\Permission;
+use Illuminate\Support\Facades\Validator;
+use App\Http\Requests\UpdateOrganizationInfoRequest;
 
 class TenantUserController extends Controller
 {
@@ -143,7 +145,7 @@ class TenantUserController extends Controller
             $tenant = Tenant::find($request->tenant_id);
 
             if (!$tenant) {
-                return $this->jsonServerError('Tenant not found.');
+                return $this->jsonServerError('Organization not found.');
             }
 
             if ($user->tenants->contains('id', $tenant->id)) {
@@ -157,7 +159,7 @@ class TenantUserController extends Controller
                 return $this->jsonNoContent();
             }
 
-            return $this->jsonServerError('You do not have access to this tenant.');
+            return $this->jsonServerError('You do not have access to this organization.');
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -165,7 +167,7 @@ class TenantUserController extends Controller
                 return $this->jsonServerError($e->getMessage());
             }
 
-            return $this->jsonServerError('Failed to switch tenant. Please try again later.');
+            return $this->jsonServerError('Failed to switch organization. Please try again later.');
         }
     }
 
@@ -200,89 +202,66 @@ class TenantUserController extends Controller
     }
 
     /**
-     * Update the basic information of a tenant
+     * @var TenantUserService
+     */
+    protected $tenantUserService;
+
+    /**
+     * @param TenantUserService $tenantUserService
+     */
+    public function __construct(TenantUserService $tenantUserService)
+    {
+        $this->tenantUserService = $tenantUserService;
+    }
+
+    /**
+     * Update the basic information of an organization
      *
-     * @param Request $request
+     * @param UpdateOrganizationInfoRequest $request
      * @param Tenant $tenant
      * @return JsonResponse|Response
      */
-    public function updateBasicInfo(Request $request, Tenant $tenant): Response|JsonResponse
+    public function updateBasicInfo(UpdateOrganizationInfoRequest $request, Tenant $tenant): Response|JsonResponse
     {
+        DB::beginTransaction();
+
         try {
-            Log::info("request: " . json_encode($request->all()));
-            $validated = $request->validate([
-                'name' => 'required|string|max:255',
-                'domain' => 'required|string|max:255|unique:tenants,domain,' . $tenant->id,
-                'logo' => ['nullable', 'image', 'max:2048'],
-                'remove_logo' => ['nullable', 'boolean'],
-                'address' => 'required|array',
-                'address.street_address' => 'required|string|max:255',
-                'address.suburb' => 'required|string|max:255',
-                'address.city' => 'required|string|max:255',
-                'address.province' => 'required|string|max:255',
-                'address.postal_code' => 'required|string|max:20',
-            ]);
+            $validated = $request->validated();
 
-            DB::beginTransaction();
-
-            // Handle logo upload
-            if ($request->hasFile('logo')) {
-                Log::info('Uploading tenant logo for ID: ' . $tenant->id);
-                $tenant->storeLogo($request->file('logo'));
-            }
-
-            // Handle logo removal
-            if ($request->boolean('remove_logo')) {
-                $tenant->deleteLogo();
-                $tenant->logo_path = null;
-                $tenant->save();
-            }
-
-            // Update tenant basic info
-            $tenant->update([
-                'name' => $validated['name'],
-                'domain' => $validated['domain'],
-            ]);
-
-            // Update or create address
-            if ($tenant->address) {
-                $tenant->address()->update($validated['address']);
-            } else {
-                $tenant->address()->create($validated['address']);
-            }
+            $tenantData = $this->tenantUserService->updateOrganizationInfo(
+                tenant: $tenant,
+                validated: $validated,
+                logoFile: $request->file('logo'),
+                removeLogo: $request->boolean('remove_logo')
+            );
 
             DB::commit();
 
-            $tenant->load('address');
-            $tenantData = $tenant->toArray();
-            $tenantData['logo_url'] = $tenant->getLogoUrl();
-
             return response()->json([
-                'message' => 'Tenant information updated successfully',
+                'message' => 'Organisation information updated successfully',
                 'data' => $tenantData
             ]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollBack();
-            //return $this->jsonUnprocessable($e->errors());
-            Log::error($e->errors());
-            return $this->jsonUnprocessable("Failed to update tenant information. Please try again later.");
+            Log::error('Validation failed while updating organization info', [
+                'errors' => $e->errors(),
+                'tenant_id' => $tenant->id
+            ]);
+            return $this->jsonUnprocessable($e->errors());
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Failed to update tenant information', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
 
             if (app()->environment('local')) {
                 return response()->json([
-                    'message' => 'Failed to update tenant information',
+                    'message' => 'Failed to update organisation information',
                     'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
                 ], 500);
             }
 
-            return $this->jsonServerError('Failed to update tenant information. Please try again later.');
+            return $this->jsonServerError('Failed to update organisation information. Please try again later.');
         }
     }
 
@@ -310,10 +289,10 @@ class TenantUserController extends Controller
 
         $user = User::findOrFail($validated['user_id']);
 
-        // Check if user is already assigned to this tenant
+        // Check if user is already assigned to this organisation
         if ($tenant->users()->where('user_id', $user->id)->exists()) {
             return response()->json([
-                'message' => 'User is already assigned to this tenant',
+                'message' => 'User is already assigned to this organisation',
             ], 422);
         }
 
@@ -328,7 +307,7 @@ class TenantUserController extends Controller
         }
 
         return response()->json([
-            'message' => 'User assigned to tenant successfully',
+            'message' => 'User assigned to organisation successfully',
         ], 201);
     }
 
@@ -340,7 +319,7 @@ class TenantUserController extends Controller
         // Check if user is assigned to this tenant
         if (!$tenant->users()->where('user_id', $user->id)->exists()) {
             return response()->json([
-                'message' => 'User is not assigned to this tenant',
+                'message' => 'User is not assigned to this organisation',
             ], 422);
         }
 
@@ -351,7 +330,7 @@ class TenantUserController extends Controller
         $user->roles()->wherePivot('team_id', $tenant->id)->detach();
 
         return response()->json([
-            'message' => 'User removed from tenant successfully',
+            'message' => 'User removed from organisation successfully',
         ]);
     }
 
