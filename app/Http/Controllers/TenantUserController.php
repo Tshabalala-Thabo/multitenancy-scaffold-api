@@ -209,9 +209,12 @@ class TenantUserController extends Controller
     public function updateBasicInfo(Request $request, Tenant $tenant): Response|JsonResponse
     {
         try {
+            Log::info("request: " . json_encode($request->all()));
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
                 'domain' => 'required|string|max:255|unique:tenants,domain,' . $tenant->id,
+                'logo' => ['nullable', 'image', 'max:2048'],
+                'remove_logo' => ['nullable', 'boolean'],
                 'address' => 'required|array',
                 'address.street_address' => 'required|string|max:255',
                 'address.suburb' => 'required|string|max:255',
@@ -221,6 +224,19 @@ class TenantUserController extends Controller
             ]);
 
             DB::beginTransaction();
+
+            // Handle logo upload
+            if ($request->hasFile('logo')) {
+                Log::info('Uploading tenant logo for ID: ' . $tenant->id);
+                $tenant->storeLogo($request->file('logo'));
+            }
+
+            // Handle logo removal
+            if ($request->boolean('remove_logo')) {
+                $tenant->deleteLogo();
+                $tenant->logo_path = null;
+                $tenant->save();
+            }
 
             // Update tenant basic info
             $tenant->update([
@@ -237,13 +253,27 @@ class TenantUserController extends Controller
 
             DB::commit();
 
-            return $this->jsonSuccess('Tenant information updated successfully');
+            $tenant->load('address');
+            $tenantData = $tenant->toArray();
+            $tenantData['logo_url'] = $tenant->getLogoUrl();
+
+            return response()->json([
+                'message' => 'Tenant information updated successfully',
+                'data' => $tenantData
+            ]);
+
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollBack();
+            //return $this->jsonUnprocessable($e->errors());
+            Log::error($e->errors());
+            return $this->jsonUnprocessable("Failed to update tenant information. Please try again later.");
 
-            return $this->jsonUnprocessable($e->errors());
         } catch (\Exception $e) {
             DB::rollBack();
+            Log::error('Failed to update tenant information', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
 
             if (app()->environment('local')) {
                 return response()->json([
