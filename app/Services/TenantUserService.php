@@ -64,12 +64,8 @@ class TenantUserService
      * @param array $addressData
      * @return void
      */
-    protected function updateOrCreateAddress(Tenant $tenant, array $addressData): void
+        protected function updateOrCreateAddress(Tenant $tenant, array $addressData): void
     {
-        if ($tenant->address) {
-            $tenant->address()->update($addressData);
-        } else {
-            $tenant->address()->create($addressData);
-        }
+        $tenant->address()->updateOrCreate([], $addressData);
     }
 }
