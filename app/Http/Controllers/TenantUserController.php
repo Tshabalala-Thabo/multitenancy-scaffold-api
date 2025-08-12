@@ -242,14 +242,6 @@ class TenantUserController extends Controller
                 'data' => $tenantData
             ]);
 
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            DB::rollBack();
-            Log::error('Validation failed while updating organization info', [
-                'errors' => $e->errors(),
-                'tenant_id' => $tenant->id
-            ]);
-            return $this->jsonUnprocessable($e->errors());
-
         } catch (\Exception $e) {
             DB::rollBack();
 
