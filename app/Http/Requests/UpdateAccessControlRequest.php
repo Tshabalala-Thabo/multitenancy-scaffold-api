@@ -13,7 +13,7 @@ class UpdateAccessControlRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true; // Authorization is handled by the controller/middleware
+        return true;
     }
 
     /**
