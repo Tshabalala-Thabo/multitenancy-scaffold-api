@@ -12,6 +12,35 @@ class TenantUserService
     /**
      * @param Tenant $tenant
      * @param array $validated
+     * @return void
+     */
+    public function updateAccessControl(Tenant $tenant, array $validated): void
+    {
+        try {
+            DB::beginTransaction();
+
+            $tenant->update([
+                'privacy_setting' => $validated['privacy_setting'],
+                'two_factor_auth_required' => $validated['two_factor_auth_required'],
+                'password_policy' => [
+                    'min_length' => $validated['password_policy']['min_length'],
+                    'requires_uppercase' => $validated['password_policy']['requires_uppercase'],
+                    'requires_lowercase' => $validated['password_policy']['requires_lowercase'],
+                    'requires_number' => $validated['password_policy']['requires_number'],
+                    'requires_symbol' => $validated['password_policy']['requires_symbol'],
+                ]
+            ]);
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * @param Tenant $tenant
+     * @param array $validated
      * @param UploadedFile|null $logoFile
      * @param bool $removeLogo
      * @return array
@@ -59,7 +88,7 @@ class TenantUserService
     }
 
     /**
-     * 
+     *
      * @param Tenant $tenant
      * @param array $addressData
      * @return void

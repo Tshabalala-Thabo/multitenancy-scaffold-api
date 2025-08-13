@@ -13,11 +13,47 @@ use Illuminate\Support\Facades\Log;
 use App\Services\TenantUserService;
 use Illuminate\Support\Facades\Auth;
 use Spatie\Permission\Models\Permission;
-use Illuminate\Support\Facades\Validator;
+use App\Http\Requests\UpdateAccessControlRequest;
 use App\Http\Requests\UpdateOrganizationInfoRequest;
+
 
 class TenantUserController extends Controller
 {
+
+    protected TenantUserService $tenantUserService;
+
+
+    /**
+     * @param TenantUserService $tenantUserService
+     */
+    public function __construct(TenantUserService $tenantUserService)
+    {
+        $this->tenantUserService = $tenantUserService;
+        $this->middleware('tenant_permission:settings:manage')->only(['getTenantSettings', 'updateBasicInfo', 'updateAccessControl']);
+    }
+
+    /**
+     * @param UpdateAccessControlRequest $request
+     * @param Tenant $tenant
+     * @return Response
+     */
+    public function updateAccessControl(UpdateAccessControlRequest $request, Tenant $tenant): Response
+    {
+        try {
+            $validated = $request->validated();
+            $this->tenantUserService->updateAccessControl($tenant, $validated);
+
+            return $this->jsonSuccess('Access control settings updated successfully');
+        } catch (\Exception $e) {
+
+            if (app()->environment('local')) {
+                return $this->jsonServerError($e->getMessage());
+            }
+
+            return $this->jsonServerError("Failed to update access control settings");
+        }
+    }
+
     /**
      * @param Request $request
      * @param Tenant $tenant
@@ -201,18 +237,6 @@ class TenantUserController extends Controller
         }
     }
 
-    /**
-     * @var TenantUserService
-     */
-    protected $tenantUserService;
-
-    /**
-     * @param TenantUserService $tenantUserService
-     */
-    public function __construct(TenantUserService $tenantUserService)
-    {
-        $this->tenantUserService = $tenantUserService;
-    }
 
     /**
      * Update the basic information of an organization
