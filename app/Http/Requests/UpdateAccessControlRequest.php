@@ -43,7 +43,7 @@ class UpdateAccessControlRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'privacy_setting.in' => 'The selected privacy setting is invalid. Must be one of: public, private, or restricted.',
+            'privacy_setting.in' => 'The selected privacy setting is invalid. Must be one of: public, or private.',
             'password_policy.min_length.min' => 'Password minimum length must be at least :min characters.',
             'password_policy.min_length.max' => 'Password minimum length may not be greater than :max characters.',
         ];
