@@ -34,10 +34,10 @@ class TenantUserService
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
+            throw $e;
         }
     }
 
-    /**
     /**
      * @param Tenant $tenant
      * @param array $validated

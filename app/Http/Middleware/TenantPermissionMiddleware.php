@@ -2,9 +2,9 @@
 
 namespace App\Http\Middleware;
 
-use Closure;
 use Illuminate\Support\Facades\Auth;
 use Spatie\Permission\Exceptions\UnauthorizedException;
+use Closure;
 
 class TenantPermissionMiddleware
 {
@@ -12,20 +12,25 @@ class TenantPermissionMiddleware
     {
         $user = Auth::guard($guard)->user();
 
-        if (! $user) {
+        if (!$user) {
             throw UnauthorizedException::notLoggedIn();
         }
 
         $tenantId = $user->current_tenant_id;
 
-        $hasRolePermission = $user->roles()
+        if (!$tenantId) {
+            throw UnauthorizedException::forPermissions([$permission]);
+        }
+
+        $hasRolePermission = $user
+            ->roles()
             ->where('roles.tenant_id', $tenantId)
             ->whereHas('permissions', function ($q) use ($permission) {
                 $q->where('name', $permission);
             })
             ->exists();
 
-        if (! $hasRolePermission) {
+        if (!$hasRolePermission) {
             throw UnauthorizedException::forPermissions([$permission]);
         }
 
