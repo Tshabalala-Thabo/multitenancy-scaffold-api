@@ -283,13 +283,29 @@ class TenantUserController extends Controller
 
 
     /**
-     * Display a listing of users for a specific tenant.
+     * @param Tenant $tenant
+     * @return Response
      */
-    public function index(Tenant $tenant)
+    public function getTenantUsers(Tenant $tenant): Response
     {
-        return response()->json([
-            'users' => $tenant->users()->with('roles')->get(),
-        ]);
+        try {
+            $tenant->load('users.roles');
+
+            $users = $tenant->users->map(function ($user) use ($tenant) {
+                $user->setRelation(
+                    'roles',
+                    $user->roles->where('pivot.tenant_id', $tenant->id)->values()
+                );
+                return $user;
+            });
+
+            return $this->json($users->toArray());
+        } catch (\Exception $e) {
+            if (app()->environment('local')) {
+                return $this->jsonServerError($e->getMessage());
+            }
+            return $this->jsonServerError('Failed to retrieve users.');
+        }
     }
 
     /**
