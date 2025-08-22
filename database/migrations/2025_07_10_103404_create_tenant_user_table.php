@@ -11,9 +11,10 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->timestamps();
-
+            $table->boolean('is_banned')->default(false);
+            $table->text('ban_reason')->nullable();
             $table->unique(['tenant_id', 'user_id']); // Prevent duplicate associations
+            $table->timestamps();
         });
     }
 

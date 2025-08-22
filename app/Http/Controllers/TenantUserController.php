@@ -309,6 +309,62 @@ class TenantUserController extends Controller
     }
 
     /**
+     * @param Request $request
+     * @param $tenantId
+     * @param $userId
+     * @return Response
+     */
+    public function banUserFromTenant(Request $request, $tenantId, $userId): Response
+    {
+        try {
+            $currentUserId = $request->user()->id;
+            $tenant = Tenant::findOrFail($tenantId);
+
+            if ($userId == $currentUserId) {
+                return $this->jsonUnprocessable('You cannot ban yourself.');
+            }
+
+            $reason = $request->input('reason');
+
+            $tenant->users()->updateExistingPivot($userId, [
+                'is_banned' => true,
+                'ban_reason' => $reason,
+            ]);
+
+            return $this->jsonSuccess('User banned successfully.');
+        } catch (\Exception $e) {
+            if (app()->environment('local')) {
+                return $this->jsonServerError($e->getMessage());
+            }
+            return $this->jsonServerError('Failed to ban user.');
+        }
+    }
+
+    /**
+     * @param $tenantId
+     * @param $userId
+     * @return Response|void
+     */
+    public function unbanUserFromTenant($tenantId, $userId)
+    {
+        try {
+            $tenant = Tenant::findOrFail($tenantId);
+
+            $tenant->users()->updateExistingPivot($userId, [
+                'is_banned' => false,
+                'ban_reason' => null,
+            ]);
+        }catch (\Exception $e) {
+            if (app()->environment('local')) {
+                return $this->jsonServerError($e->getMessage());
+            }
+            return $this->jsonServerError('Failed to unban user.');
+        }
+    }
+
+
+
+    /**
      * Assign a user to a tenant.
      */
     public function assignUser(Request $request, Tenant $tenant)
