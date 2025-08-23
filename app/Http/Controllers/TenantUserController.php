@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use App\Models\TenantUserBan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
@@ -75,27 +76,14 @@ class TenantUserController extends Controller
                 ->first();
 
             if (!$memberRole) {
-                Log::error('Member role not found for tenant', [
-                    'tenant_id' => $tenant->id
-                ]);
-                return $this->jsonServerError('Member role not found for this organization', 500);
+                return $this->jsonServerError('Member role not found for this organization');
             }
 
             $tenant->users()->attach($user->id);
-            Log::info('User attached to tenant', [
-                'user_id' => $user->id,
-                'tenant_id' => $tenant->id
-            ]);
 
             $user->roles()->attach($memberRole->id, [
                 'tenant_id' => $tenant->id,
             ]);
-            Log::info('Role assigned to user', [
-                'user_id' => $user->id,
-                'role_id' => $memberRole->id,
-                'tenant_id' => $tenant->id
-            ]);
-
             $user->current_tenant_id = $tenant->id;
             $user->save();
 
@@ -105,7 +93,6 @@ class TenantUserController extends Controller
 
             return $this->jsonCreated('You have successfully joined the organization as a member');
         } catch (\Exception $e) {
-            // Rollback the transaction on error
             DB::rollBack();
             if (app()->environment('local')) {
                 return $this->jsonServerError($e->getMessage());
@@ -317,51 +304,79 @@ class TenantUserController extends Controller
     public function banUserFromTenant(Request $request, $tenantId, $userId): Response
     {
         try {
-            $currentUserId = $request->user()->id;
-            $tenant = Tenant::findOrFail($tenantId);
-
-            if ($userId == $currentUserId) {
-                return $this->jsonUnprocessable('You cannot ban yourself.');
-            }
-
-            $reason = $request->input('reason');
-
-            $tenant->users()->updateExistingPivot($userId, [
-                'is_banned' => true,
-                'ban_reason' => $reason,
+            $request->validate([
+                'reason' => 'nullable|string|max:500',
             ]);
 
-            return $this->jsonSuccess('User banned successfully.');
+            $tenant = Tenant::findOrFail($tenantId);
+            $user = User::findOrFail($userId);
+
+            $ban = TenantUserBan::updateOrCreate(
+                [
+                    'tenant_id' => $tenant->id,
+                    'user_id' => $userId,
+                ],
+                [
+                    'reason' => $request->reason,
+                    'banned_at' => now(),
+                    'banned_by' => Auth::id(),
+                    'unbanned_at' => null,
+                    'unbanned_by' => null,
+                    'unban_reason' => null,
+                ]
+            );
+
+            $tenant->users()->detach($userId);
+
+            $user->roles()
+                ->wherePivot('tenant_id', $tenant->id)
+                ->detach();
+
+            return $this->json(['message' => 'User banned successfully', 'ban' => $ban]);
         } catch (\Exception $e) {
             if (app()->environment('local')) {
                 return $this->jsonServerError($e->getMessage());
             }
             return $this->jsonServerError('Failed to ban user.');
         }
+
     }
 
+
     /**
+     * @param Request $request
      * @param $tenantId
      * @param $userId
-     * @return Response|void
+     * @return Response
      */
-    public function unbanUserFromTenant($tenantId, $userId)
+    public function unbanUserFromTenant(Request $request, $tenantId, $userId): Response
     {
         try {
+            $request->validate([
+                'unban_reason' => 'required|string|max:500',
+            ]);
+
             $tenant = Tenant::findOrFail($tenantId);
 
-            $tenant->users()->updateExistingPivot($userId, [
-                'is_banned' => false,
-                'ban_reason' => null,
+            $ban = TenantUserBan::where('tenant_id', $tenant->id)
+                ->where('user_id', $userId)
+                ->whereNull('unbanned_at')
+                ->firstOrFail();
+
+            $ban->update([
+                'unbanned_at' => now(),
+                'unbanned_by' => Auth::id(),
+                'unban_reason' => $request->unban_reason,
             ]);
-        }catch (\Exception $e) {
+
+            return $this->json(['message' => 'User unbanned successfully', 'ban' => $ban]);
+        } catch (\Exception $e) {
             if (app()->environment('local')) {
                 return $this->jsonServerError($e->getMessage());
             }
             return $this->jsonServerError('Failed to unban user.');
         }
     }
-
 
 
     /**
