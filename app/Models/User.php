@@ -95,4 +95,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(TenantUserBan::class);
     }
+
+    public function bannedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'banned_by');
+    }
 }

@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\TenantController;
 use App\Http\Controllers\TenantUserController;
+use App\Http\Controllers\TenantUserBanController;
 
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/user', [UserController::class, 'getUserInfo']);
@@ -18,9 +19,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::put('/tenants/{tenant}/access-control', [TenantUserController::class, 'updateAccessControl']);
     Route::put('/tenants/{tenant}/permissions', [TenantUserController::class, 'updatePermissions']);
     Route::post('/tenants/{tenant}/logo', [TenantUserController::class, 'uploadLogo']);
+   Route::get('/tenants/{tenant}/users', [TenantUserController::class, 'getTenantUsers']);
 
-    Route::get('/tenants/{tenant}/users', [TenantUserController::class, 'getTenantUsers']);
-    Route::post('/tenants/{tenant}/users/{user}/ban', [TenantUserController::class, 'banUserFromTenant']);
-    Route::post('/tenants/{tenant}/users/{user}/unban', [TenantUserController::class, 'unbanUserFromTenant']);
+   Route::get('/tenants/{tenant}/bans', [TenantUserBanController::class, 'getTenantBans']);
+    Route::post('/tenants/{tenant}/users/{user}/ban', [TenantUserBanController::class, 'banUserFromTenant']);
+    Route::post('/tenants/{tenant}/users/{user}/unban', [TenantUserBanController::class, 'unbanUserFromTenant']);
 });
 
