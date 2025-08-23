@@ -67,6 +67,17 @@ class TenantUserController extends Controller
         try {
             DB::beginTransaction();
 
+            $activeBan = TenantUserBan::where('tenant_id', $tenant->id)
+                ->where('user_id', $user->id)
+                ->whereNull('unbanned_at')
+                ->first();
+
+            if ($activeBan) {
+                return $this->jsonForbidden(
+                    "You are currently banned from this organization.",
+                );
+            }
+
             if ($tenant->users()->where('user_id', $user->id)->exists()) {
                 return $this->jsonUnprocessable('You are already a member of this organization');
             }

@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Tenant;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
+use App\Models\TenantUserBan;
 use Illuminate\Http\Response;
 use Illuminate\Validation\Rule;
 use Illuminate\Http\JsonResponse;
@@ -29,7 +30,12 @@ class TenantController extends Controller
 
             if (!$user->hasRole('super_admin')) {
                 $userTenantIds = $user->tenants->pluck('id');
-                $query->whereNotIn('id', $userTenantIds);
+                $bannedTenantIds = TenantUserBan::where('user_id', $user->id)
+                    ->whereNull('unbanned_at')
+                    ->pluck('tenant_id');
+
+                $query->whereNotIn('id', $userTenantIds)
+                    ->whereNotIn('id', $bannedTenantIds);
             }
 
             $tenants = $query->get()->map(function ($tenant) {
