@@ -19,9 +19,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::put('/tenants/{tenant}/access-control', [TenantUserController::class, 'updateAccessControl']);
     Route::put('/tenants/{tenant}/permissions', [TenantUserController::class, 'updatePermissions']);
     Route::post('/tenants/{tenant}/logo', [TenantUserController::class, 'uploadLogo']);
-   Route::get('/tenants/{tenant}/users', [TenantUserController::class, 'getTenantUsers']);
+    Route::get('/tenants/{tenant}/users', [TenantUserController::class, 'getTenantUsers']);
 
-   Route::get('/tenants/{tenant}/bans', [TenantUserBanController::class, 'getTenantBans']);
+    Route::get('/tenants/{tenant}/bans', [TenantUserBanController::class, 'index']);
     Route::post('/tenants/{tenant}/users/{user}/ban', [TenantUserBanController::class, 'banUserFromTenant']);
     Route::post('/tenants/{tenant}/users/{user}/unban', [TenantUserBanController::class, 'unbanUserFromTenant']);
 });

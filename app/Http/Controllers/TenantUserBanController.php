@@ -28,10 +28,11 @@ class TenantUserBanController extends Controller
 
             $bans = TenantUserBan::with('user', 'bannedBy')
                 ->where('tenant_id', $tenantId)
+                ->whereNull('unbanned_at')
                 ->get();
 
             return $this->jsonResource(TenantUserBanResource::collection($bans));
-            
+
         } catch (\Exception $e) {
             if (app()->environment('local')) {
                 return $this->jsonServerError($e->getMessage());
@@ -99,7 +100,7 @@ class TenantUserBanController extends Controller
     {
         try {
             $request->validate([
-                'unban_reason' => 'required|string|max:500',
+                'reason' => 'nullable|string|max:500',
             ]);
 
             $tenant = Tenant::findOrFail($tenantId);
@@ -112,7 +113,7 @@ class TenantUserBanController extends Controller
             $ban->update([
                 'unbanned_at' => now(),
                 'unbanned_by' => Auth::id(),
-                'unban_reason' => $request->unban_reason,
+                'unban_reason' => $request->reason,
             ]);
 
             return $this->json(['message' => 'User unbanned successfully', 'ban' => $ban]);
