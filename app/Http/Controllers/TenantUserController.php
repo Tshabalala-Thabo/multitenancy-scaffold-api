@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Tenant;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use App\Models\TenantUserBan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
@@ -66,6 +67,17 @@ class TenantUserController extends Controller
         try {
             DB::beginTransaction();
 
+            $activeBan = TenantUserBan::where('tenant_id', $tenant->id)
+                ->where('user_id', $user->id)
+                ->whereNull('unbanned_at')
+                ->first();
+
+            if ($activeBan) {
+                return $this->jsonForbidden(
+                    "You are currently banned from this organization.",
+                );
+            }
+
             if ($tenant->users()->where('user_id', $user->id)->exists()) {
                 return $this->jsonUnprocessable('You are already a member of this organization');
             }
@@ -75,27 +87,14 @@ class TenantUserController extends Controller
                 ->first();
 
             if (!$memberRole) {
-                Log::error('Member role not found for tenant', [
-                    'tenant_id' => $tenant->id
-                ]);
-                return $this->jsonServerError('Member role not found for this organization', 500);
+                return $this->jsonServerError('Member role not found for this organization');
             }
 
             $tenant->users()->attach($user->id);
-            Log::info('User attached to tenant', [
-                'user_id' => $user->id,
-                'tenant_id' => $tenant->id
-            ]);
 
             $user->roles()->attach($memberRole->id, [
                 'tenant_id' => $tenant->id,
             ]);
-            Log::info('Role assigned to user', [
-                'user_id' => $user->id,
-                'role_id' => $memberRole->id,
-                'tenant_id' => $tenant->id
-            ]);
-
             $user->current_tenant_id = $tenant->id;
             $user->save();
 
@@ -105,7 +104,6 @@ class TenantUserController extends Controller
 
             return $this->jsonCreated('You have successfully joined the organization as a member');
         } catch (\Exception $e) {
-            // Rollback the transaction on error
             DB::rollBack();
             if (app()->environment('local')) {
                 return $this->jsonServerError($e->getMessage());
@@ -283,13 +281,29 @@ class TenantUserController extends Controller
 
 
     /**
-     * Display a listing of users for a specific tenant.
+     * @param Tenant $tenant
+     * @return Response
      */
-    public function index(Tenant $tenant)
+    public function getTenantUsers(Tenant $tenant): Response
     {
-        return response()->json([
-            'users' => $tenant->users()->with('roles')->get(),
-        ]);
+        try {
+            $tenant->load('users.roles');
+
+            $users = $tenant->users->map(function ($user) use ($tenant) {
+                $user->setRelation(
+                    'roles',
+                    $user->roles->where('pivot.tenant_id', $tenant->id)->values()
+                );
+                return $user;
+            });
+
+            return $this->json($users->toArray());
+        } catch (\Exception $e) {
+            if (app()->environment('local')) {
+                return $this->jsonServerError($e->getMessage());
+            }
+            return $this->jsonServerError('Failed to retrieve users.');
+        }
     }
 
     /**

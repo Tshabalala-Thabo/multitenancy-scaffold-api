@@ -12,7 +12,6 @@ return new class extends Migration {
             $table->foreignId('tenant_id')->constrained()->onDelete('cascade');
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->timestamps();
-
             $table->unique(['tenant_id', 'user_id']); // Prevent duplicate associations
         });
     }

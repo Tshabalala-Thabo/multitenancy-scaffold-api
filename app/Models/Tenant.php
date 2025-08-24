@@ -127,4 +127,13 @@ class Tenant extends BaseTenant
             static::current($this);
         });
     }
+
+    /**
+     * @return HasMany
+     */
+    public function bans()
+    {
+        return $this->hasMany(TenantUserBan::class);
+    }
+
 }
